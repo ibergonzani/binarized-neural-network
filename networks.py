@@ -11,35 +11,36 @@ import layers
 		# return None, None
 		
 	
-def multilayer_perceptron(units_list):
-	input = tf.placeholder(tf.float32, [None, units_list[0]])
+def multilayer_perceptron(input, units_list):
 	output = input
-	for l in range(1, len(units_list)):
+	for l in range(len(units_list)):
 		output = tf.layers.dense(output, units_list[l], activation=tf.nn.relu)
 		
 	return input, output
 	
 	
-def binary_multilayer_perceptron(units_list):
-	input = tf.placeholder(tf.float32, [None, units_list[0]])
+def binary_multilayer_perceptron(input, units_list):
 	output = input
-	for l in range(1, len(units_list)):
-		output = layers.binaryDense(output, units_list[l], activation=tf.nn.relu)
-		
+	for l in range(len(units_list)-1):
+		output = layers.binaryDense(output, units_list[l], activation=None, name='binarydense'+str(l))
+		output = tf.contrib.layers.batch_norm(output)
+		output = tf.clip_by_value(output, -1, 1)
+	output = layers.binaryDense(output, units_list[l+1], activation=None, name='binarydense'+str(len(units_list)-1))
+	output = tf.contrib.layers.batch_norm(output)
 	return input, output
 
 	
-def cifar100():
+def cifar100(input):
 	pass
 
 
-def binary_cifar100():
+def binary_cifar100(input):
 	pass
 
-def mnist():
+def mnist(input):
 	pass
 	
-def binary_mnist():
+def binary_mnist(input):
 	pass
 	
 	

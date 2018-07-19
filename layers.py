@@ -1,10 +1,10 @@
 import tensorflow as tf
-
+from tensorflow.python.framework import ops
 
 def binarize(x):
 	# we also have to reassign the sign gradient otherwise it will be almost everywhere equal to zero
 	# using the straight through estimator
-	with tf.get_default_graph().override_gradient_map('Sign', 'Identity'):
+	with tf.get_default_graph().gradient_override_map({'Sign': 'Identity'}):
 		return tf.sign(x)
 
 
@@ -15,7 +15,7 @@ def binaryDense(inputs, units, activation=None, use_bias=True, trainable=True, b
 	flat_input = tf.contrib.layers.flatten(inputs)
 	
 	# count all the input units (thus check the shape without considering the batch size)
-	in_units = flat_input.get_shape().to_list()[1]
+	in_units = flat_input.get_shape().as_list()[1]
 	
 	with tf.variable_scope(name, reuse=reuse):
 		# getting layer weights and add clip operation (between -1, 1)
@@ -51,11 +51,11 @@ def binaryConv2d(inputs, filters, kernel_size, strides, padding="VALID", bias=Tr
 	
 	if data_format == 'NHWC':
 		strides = [1] + strides + [1]
-		in_ch = input.get_shape().to_list()[3]
+		in_ch = input.get_shape().as_list()[3]
 		wshape = [in_ch] + kernel_size + [filters]
 	elif data_format == 'NCHW':
 		strides = [1, 1] + strides
-		in_ch = input.get_shape().to_list()[1]	
+		in_ch = input.get_shape().as_list()[1]	
 		wshape = [in_ch, filters] + kernel_size
 	
 	
