@@ -7,28 +7,8 @@ import time
 import os
 
 #from tensorflow.examples.tutorials.mnist import dataset
-from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 
-
-class Trainer():
-	def __init__(self, net_input, net_output, labels, optimizer=tf.train.AdamOptimizer(learning_rate=1e-4)):
-		self.net_input = net_input
-		self.net_output = net_output
-		self.optimizer = optimizer
-		
-		with tf.variable_scope('trainer_optimizer'):
-			self.loss = tf.losses.mean_squared_error(labels, self.net_output)
-			self.opt = self.optimizer.minimize(loss=self.loss)
-		
-	def train(self, sess):
-		loss, _ = sess.run([self.loss, self.opt])
-		return loss
-	
-	
-	def eval(self, sess):
-		y_net, loss = sess.run([self.net_output, self.loss])
-		return loss
 
 
 # def load_mnist():
@@ -46,28 +26,6 @@ def random_dataset():
 	
 	x_trn, x_tst, y_trn, y_tst = train_test_split(x, y, test_size=0.3, random_state=42)
 	return x_trn, y_trn, x_tst, y_tst
-	
-	
-# def cross_validation(sess, splits, trainer, x_train, y_train):
-	
-	# trn_loss = 0
-	# val_loss = 0
-	
-	# kf = KFold(n_splits=splits)
-	# for trn_ids, val_ids in kf.split(x_train, y_train):
-		# x_trn, y_trn = x_train[trn_ids], y_train[trn_ids]
-		# x_val, y_val = x_train[val_ids], y_train[val_ids]
-		
-		# fold_trn_loss = trainer.train(sess, x_trn, y_trn)
-		# fold_val_loss = trainer.eval(sess, x_val, y_val)
-		
-		# trn_loss = trn_loss + fold_trn_loss
-		# val_loss = val_loss + fold_val_loss
-	
-	# trn_loss = trn_loss / splits
-	# val_loss = val_loss / splits
-	
-	# return trn_loss, val_loss
 		
 
 parser = argparse.ArgumentParser(description='Training module for binarized nets')
@@ -76,7 +34,6 @@ parser.add_argument('--modeldir', dest='modeldir', type=str, default='./models/'
 parser.add_argument('--logdir', dest='logdir', type=str, default='./logs/', help='folder for tensorboard logs')
 parser.add_argument('--epochs', dest='epochs', type=int, default=10, help='Number of epochs performed during training')
 parser.add_argument('--batchsize', dest='batchsize', type=int, default=100, help='Dimension of the training batch')
-#parser.add_argument('--dataset', dest='dataset_path', type=string, help='Dataset path', required=True)
 args = parser.parse_args()
 
 
@@ -118,7 +75,12 @@ test_initialization = data_iterator.make_initializer(test_data)
 
 # network initialization
 xnet, ynet = networks.multilayer_perceptron(features, [100, 100, 50, 1])
-trainer = Trainer(xnet, ynet, labels)
+
+with tf.variable_scope('trainer_optimizer'):
+	optimizer=tf.train.AdamOptimizer(learning_rate=1e-4)
+	loss = tf.losses.mean_squared_error(labels, ynet)
+	train_op = self.optimizer.minimize(loss=loss)
+	
 
 # network weights saver
 saver = tf.train.Saver()
@@ -141,34 +103,35 @@ with tf.Session() as sess:
 		
 		# initialize training dataset
 		sess.run(train_initialization, feed_dict={data_features:x_train, data_labels:y_train, batch_size:BATCH_SIZE})
-			
+		
+		# Training of the network
 		for nb in range(NUM_BATCHES_TRAIN):
-			# train network on a single batch
-			batch_trn_loss = trainer.train(sess)
-			#accumulating loss
-			trn_loss = trn_loss + batch_trn_loss
+			batch_trn_loss, _ = sess.run([loss, train_op])	# train network on a single batch
+			trn_loss = trn_loss + batch_trn_loss			# accumulating loss
 			print("EPOCH %d, training %2f" % (epoch+1, (nb+1)/NUM_BATCHES_TRAIN), end='\r')
 		
-		trn_loss = trn_loss / NUM_BATCHES_TRAIN
+		trn_loss = trn_loss / NUM_BATCHES_TRAIN				# naive mean loss
 		print("EPOCH %d, training completed, loss %4f" % (epoch+1, trn_loss))
 			
+		
 		# initialize the test dataset
 		sess.run(test_initialization, feed_dict={data_features:x_test, data_labels:y_test, batch_size:BATCH_SIZE})
 		
+		# evaluation of the network
 		for nb in range(NUM_BATCHES_TEST):
-			#evaluate network
-			batch_val_loss = trainer.eval(sess)
-			# accumulating loss
-			val_loss = val_loss + batch_val_loss
+			_, batch_val_loss = sess.run([ynet, loss])	# evaluate network on single batch
+			val_loss = val_loss + batch_val_loss		# accumulating loss
 			print("EPOCH %d, evaluation %2f" % (epoch+1, (nb+1)/NUM_BATCHES_TEST), end='\r')
 		
-		val_loss = val_loss / NUM_BATCHES_TEST
+		val_loss = val_loss / NUM_BATCHES_TEST			# naive mean loss
 		print("EPOCH %d, evaluation completed, loss %4f" % (epoch+1, val_loss))
+		
 		
 		summary = tf.Summary(value=[tf.Summary.Value(tag="MSE loss", simple_value=trn_loss)])
 		train_writer.add_summary(summary, epoch)
 		summary = tf.Summary(value=[tf.Summary.Value(tag="MSE loss", simple_value=val_loss)])
 		test_writer.add_summary(summary, epoch)
+	
 	
 	train_writer.close()
 	test_writer.close()
