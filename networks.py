@@ -38,10 +38,31 @@ def binary_cifar100(input):
 	pass
 
 def mnist(input):
-	pass
+	dr1 = tf.layer.dropout(input)
+	fc1 = tf.layers.dense(dr1, 4096, activation=tf.nn.relu)
+	dr2 = tf.layer.dropout(fc1)
+	fc2 = tf.layers.dense(fc1, 4096, activation=tf.nn.relu)
+	dr3 = tf.layer.dropout(fc1)
+	fc3 = tf.layers.dense(fc2, 4096, activation=tf.nn.relu)
+	dr4 = tf.layer.dropout(fc1)
+	output = tf.softmax(fc4, 32)
+	return input, output
 	
 def binary_mnist(input):
-	pass
+	fc1 = layers.binaryDense(input, 4096, activation=None, name="binarydense1")
+	bn1 = tf.contrib.layers.batch_norm(fc1)
+	ac1 = tf.clip_by_value(bn1, -1, 1)
+	fc2 = layers.binaryDense(ac1, 4096, activation=None, name="binarydense2")
+	bn2 = tf.contrib.layers.batch_norm(fc2)
+	ac2 = tf.clip_by_value(bn2, -1, 1)
+	fc3 = layers.binaryDense(ac2, 4096, activation=None, name="binarydense3")
+	bn3 = tf.contrib.layers.batch_norm(fc3)
+	ac3 = tf.clip_by_value(bn3, -1, 1)
+	fc4 = layers.binaryDense(ac3, 4096, activation=None, name="binarydense4")
+	bn4 = tf.contrib.layers.batch_norm(fc4)
+	output = tf.softmax(bn4, 32)
+	
+	return input, output
 	
 	
 def netlist():
