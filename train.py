@@ -36,11 +36,11 @@ parser.add_argument('--epochs', dest='epochs', type=int, default=10, help='Numbe
 parser.add_argument('--batchsize', dest='batchsize', type=int, default=100, help='Dimension of the training batch')
 args = parser.parse_args()
 
-
 MODELDIR = args.modeldir
 LOGDIR = args.logdir
 EPOCHS = args.epochs
 BATCH_SIZE = args.batchsize
+
 
 timestamp = int(time.time())
 
@@ -77,9 +77,9 @@ test_initialization = data_iterator.make_initializer(test_data)
 xnet, ynet = networks.multilayer_perceptron(features, [100, 100, 50, 1])
 
 with tf.variable_scope('trainer_optimizer'):
-	optimizer=tf.train.AdamOptimizer(learning_rate=1e-4)
+	optimizer = tf.train.AdamOptimizer(learning_rate=1e-4)
 	loss = tf.losses.mean_squared_error(labels, ynet)
-	train_op = self.optimizer.minimize(loss=loss)
+	train_op = optimizer.minimize(loss=loss)
 	
 
 # network weights saver
