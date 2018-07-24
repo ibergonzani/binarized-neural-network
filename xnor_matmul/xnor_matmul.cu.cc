@@ -174,7 +174,7 @@ __global__ void xnor_gemm(unsigned int* A, unsigned int* B, T* C, int m, int n, 
 
 // Define the GPU implementation that launches the CUDA kernel.
 template <typename T>
-void XNORmatmulFunctor<GPUDevice, T>::operator()(const GPUDevice& d, T* a_mtx, T* b_mtx, T* out, int m, int n, int k)
+void XnorMatmulFunctor<GPUDevice, T>::operator()(const GPUDevice& d, T* a_mtx, T* b_mtx, T* out, int m, int n, int k)
 {
 	
 	// allocate memory for concatenated A matrix and b matrix
@@ -201,7 +201,7 @@ void XNORmatmulFunctor<GPUDevice, T>::operator()(const GPUDevice& d, T* a_mtx, T
 
 
 // Explicitly instantiate functors for the types of OpKernels registered.
-template struct XNORmatmulFunctor<GPUDevice, float>;
-template struct XNORmatmulFunctor<GPUDevice, int32>;
+template struct XnorMatmulFunctor<GPUDevice, float>;
+template struct XnorMatmulFunctor<GPUDevice, int32>;
 
 #endif  // GOOGLE_CUDA

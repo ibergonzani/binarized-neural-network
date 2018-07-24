@@ -8,11 +8,11 @@
 using namespace tensorflow;
 
 
-REGISTER_OP("XNORmatmul")
+REGISTER_OP("XnorMatmul")
 	.Attr("T: {float, int32}")
-	.Input("A: T")
-	.Input("B: T")
-	.Output("C: T")
+	.Input("a: T")
+	.Input("b: T")
+	.Output("c: T")
 	.SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
 		c->set_output(0, c->input(0));
 		return Status::OK();
@@ -40,7 +40,7 @@ using GPUDevice = Eigen::GpuDevice;
 
 // CPU specialization of actual computation.
 template <typename T>
-struct XNORmatmulFunctor<CPUDevice, T> {
+struct XnorMatmulFunctor<CPUDevice, T> {
 	void operator()(const CPUDevice& d, T* a_mtx, T* b_mtx, T* out, int m, int n, int k) {
 		// for (int i = 0; i < size; ++i) {
 			// out[i] = 2 * in[i];
@@ -51,18 +51,18 @@ struct XNORmatmulFunctor<CPUDevice, T> {
 	
 	
 template <typename Device, typename T>
-class XNORmatmul : public OpKernel {
+class XnorMatmul : public OpKernel {
 	
 	public:
 	
-	explicit XNORmatmul(OpKernelConstruction* context) : OpKernel(context) {}
+	explicit XnorMatmul(OpKernelConstruction* context) : OpKernel(context) {}
 	
 	// Operation inmplementation. Calls the correct template method based on the device
 	void Compute(OpKernelContext* context) override {
 		
 		// matrix tensors to be multiplicated together
 		const Tensor& a_mtx_tensor = context->input(0);
-		const Tensor& b_mtx_tensor = context->input(0);
+		const Tensor& b_mtx_tensor = context->input(1);
 		
 		// getting matrices dimesions
 		const TensorShape& a_shape = a_mtx_tensor.shape();
@@ -83,7 +83,7 @@ class XNORmatmul : public OpKernel {
 		OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &output_tensor));
 		
 		// calling multiplication kernel (on CPU or GPU)
-		XNORmatmulFunctor<Device, T>()(
+		XnorMatmulFunctor<Device, T>()(
 			context->eigen_device<Device>(),
 			(T*)&(a_mtx_tensor.flat<T>()(0)),
 			(T*)&(b_mtx_tensor.flat<T>()(0)),
@@ -99,8 +99,8 @@ class XNORmatmul : public OpKernel {
 // Register the CPU kernels.
 #define REGISTER_CPU(type)                                          	\
   REGISTER_KERNEL_BUILDER(                                       		\
-      Name("XNORmatmul").Device(DEVICE_CPU).TypeConstraint<type>("T"), 	\
-      XNORmatmul<CPUDevice, type>);
+      Name("XnorMatmul").Device(DEVICE_CPU).TypeConstraint<type>("T"), 	\
+      XnorMatmul<CPUDevice, type>);
 REGISTER_CPU(float);
 REGISTER_CPU(int32);
 
@@ -109,10 +109,10 @@ REGISTER_CPU(int32);
 
 
 #define REGISTER_GPU(type)     											\
-  extern template struct XNORmatmulFunctor<GPUDevice, type>;					\
+  extern template struct XnorMatmulFunctor<GPUDevice, type>;					\
   REGISTER_KERNEL_BUILDER(                                       		\
-      Name("XNORmatmul").Device(DEVICE_GPU).TypeConstraint<type>("T"), 	\
-      XNORmatmul<GPUDevice, type>);
+      Name("XnorMatmul").Device(DEVICE_GPU).TypeConstraint<type>("T"), 	\
+      XnorMatmul<GPUDevice, type>);
 REGISTER_GPU(float);
 REGISTER_GPU(int32);
 #endif  // GOOGLE_CUDA
