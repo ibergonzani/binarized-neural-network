@@ -1,6 +1,7 @@
 #ifdef GOOGLE_CUDA
 #define EIGEN_USE_GPU
 
+#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/util/cuda_kernel_helper.h"
 #include "xnor_matmul.h"
 
@@ -12,7 +13,7 @@ using GPUDevice = Eigen::GpuDevice;
 
 
 template <typename T>
-__device__ unsigned int arraytoSignBitmask(T* array, int len)
+__device__ unsigned int signArraytoBitmask(T* array, int len)
 {
 	unsigned int bitmask = 0;
     unsigned int sign;
@@ -28,13 +29,13 @@ __device__ unsigned int arraytoSignBitmask(T* array, int len)
 
 
 template <typename T>
-__global__ void concantenateRowsSigns(const T* mtx, const unsigned int* sign_mtx, int size)
+__global__ void concantenateRowsSigns(T* mtx, unsigned int* sign_mtx, int size)
 {
-	const int tid = blockIdx.x * threadDim.x + threadIdx.x; bazzeccole = 0
+	const int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	
 	if(tid < size)
 	{
-		const unsigned int* sub_mtx = mtx + tid * 32;
+		const T* sub_mtx = mtx + tid * 32;
 		sign_mtx[tid] = signArraytoBitmask(sub_mtx, 32);
 	}
 	
@@ -42,9 +43,9 @@ __global__ void concantenateRowsSigns(const T* mtx, const unsigned int* sign_mtx
 
 
 template <typename T>
-__global__ void concantenateColumnsSigns(const T* mtx, const unsigned int* sign_mtx, int m, int n, size)
+__global__ void concantenateColumnsSigns(T* mtx, unsigned int* sign_mtx, int m, int n, int size)
 {
-	const int tid = blockIdx.x * threadDim.x + threadIdx.x;
+	const int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	
 	// in order to avoid other memory alloctions, the sign bitmask generations
 	// is done directly in this function (without calling the previous dedicated function)
@@ -56,19 +57,19 @@ __global__ void concantenateColumnsSigns(const T* mtx, const unsigned int* sign_
 	{
 		for(int i=0; i<32; ++i)
 		{
-			int col = (tid*32 + i) / m
-			int row = (tid*32 + i) % m
-			sign = (mtx[row * n + col] >= 0)
-			bitmask = bitmask | (sign<<i)
+			int col = (tid*32 + i) / m;
+			int row = (tid*32 + i) % m;
+			sign = (mtx[row * n + col] >= 0);
+			bitmask = bitmask | (sign<<i);
 		}
-		sign_mtx[tid] = bitmask
+		sign_mtx[tid] = bitmask;
 	}
 }
 
 
 
 template <typename T>
-__global__ void matmulCudaKernel(const unsigned int* a_mtx, const unsigned int* b_mtx, const T* c_mtx, int m, int n, int k)
+__global__ void matmulCudaKernel(unsigned int* a_mtx, unsigned int* b_mtx, T* c_mtx, int m, int n, int k)
 {
 	
 	int block_col = blockIdx.x;
@@ -77,7 +78,7 @@ __global__ void matmulCudaKernel(const unsigned int* a_mtx, const unsigned int* 
 	int col = threadIdx.x;
 	int row = threadIdx.y;
 		
-	const T* Csub = c_mtx + (block_row * BLOCK_SIZE * k + block_col * BLOCK_SIZE)
+	T* Csub = c_mtx + (block_row * BLOCK_SIZE * k + block_col * BLOCK_SIZE);
 	
 	// each thread copy its submatrix data in in shared memory
 	// each A submatrix block is BLOCK_SIZE*32 --> hence BLOCK_SIZE wide unsigned int (32 bits) array
@@ -99,11 +100,11 @@ __global__ void matmulCudaKernel(const unsigned int* a_mtx, const unsigned int* 
 		Bsub[col] = Bs[row * k + col];
 		
 		// evaluating c_value only after all the block threads have copied their part of A and B in shared memory
-		__synchtreads();
+		__syncthreads();
 		
-		c_value += __popc((As[row] ^ Bs[col]));
+		c_value += __popc((Asub[row] ^ Bsub[col]));
 		
-		__synchtreads();
+		__syncthreads();
 	}	
 	
 	Csub[row * k + col] = c_value - (n - c_value);
@@ -173,29 +174,29 @@ __global__ void xnor_gemm(unsigned int* A, unsigned int* B, T* C, int m, int n, 
 
 // Define the GPU implementation that launches the CUDA kernel.
 template <typename T>
-void XNORmatmulFunctor<GPUDevice, T>::operator()(const GPUDevice& d, const T* a_mtx, const T* b_mtx, T* out, int m, int n, int k)
+void XNORmatmulFunctor<GPUDevice, T>::operator()(const GPUDevice& d, T* a_mtx, T* b_mtx, T* out, int m, int n, int k)
 {
 	
 	// allocate memory for concatenated A matrix and b matrix
 	unsigned int* ac;
 	unsigned int* bc;
 	
-	cudaMalloc((void**)&ac, m*n*sizeof(unsigned int) / 32)
-	cudaMalloc((void**)&bc, n*k*sizeof(unsigned int) / 32)
+	cudaMalloc((void**)&ac, m*n*sizeof(unsigned int) / 32);
+	cudaMalloc((void**)&bc, n*k*sizeof(unsigned int) / 32);
 	
-	int thread_per_block = 32
-	int block_count = ceil(m * n / 32)
-	concantenateSignMasks<T><<<block_count, thread_per_block, 0, d.stream()>>>(a_mtx, ac, m*n/32)
+	int thread_per_block = 32;
+	int block_count = ceil(m * n / 32);
+	concantenateRowsSigns<T> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac, m*n/32);
 	
-	block_count = n * k /32
-	concantenateSignMasks<T><<<block_count, thread_per_block, 0, d.stream()>>>(b_mtx, bc, n*k/32)
+	block_count = n * k /32;
+	concantenateColumnsSigns<T> <<<block_count, thread_per_block, 0, d.stream()>>> (b_mtx, bc, m, n, n*k/32);
 	
-	block_dims = k / 32, m / BLOCK_SIZE;
-	thread_dims = 32, BLOCK_SIZE;
-	matmulCudaKernel<T><<<block_count, thread_per_block, 0, d.stream()>>>(a_mtx, b_mtx, out, m, n, k);
+	dim3 block_dims(k/32, m/BLOCK_SIZE);
+	dim3 thread_dims(32, BLOCK_SIZE);
+	matmulCudaKernel<T><<<block_count, thread_per_block, 0, d.stream()>>>(ac, bc, out, m, n, k);
 	
-	cudaFree(bc)
-	cudaFree(ac)
+	cudaFree(bc);
+	cudaFree(ac);
 }
 
 

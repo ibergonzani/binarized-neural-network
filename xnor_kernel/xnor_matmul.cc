@@ -41,7 +41,7 @@ using GPUDevice = Eigen::GpuDevice;
 // CPU specialization of actual computation.
 template <typename T>
 struct XNORmatmulFunctor<CPUDevice, T> {
-	void operator()(const CPUDevice& d, const T* a_mtx, const T* b_mtx, T* out, int m, int n, int k) {
+	void operator()(const CPUDevice& d, T* a_mtx, T* b_mtx, T* out, int m, int n, int k) {
 		// for (int i = 0; i < size; ++i) {
 			// out[i] = 2 * in[i];
 		// }
@@ -85,32 +85,34 @@ class XNORmatmul : public OpKernel {
 		// calling multiplication kernel (on CPU or GPU)
 		XNORmatmulFunctor<Device, T>()(
 			context->eigen_device<Device>(),
-			a_mtx_tensor.flat<T>().data(),
-			b_mtx_tensor.flat<T>().data(),
-			output_tensor->flat<T>().data(),
-			a_shape.dim_size(0),
-			a_shape.dim_size(1),
-			b_shape.dim_size(0));
+			(T*)&(a_mtx_tensor.flat<T>()(0)),
+			(T*)&(b_mtx_tensor.flat<T>()(0)),
+			(T*)&(output_tensor->flat<T>()(0)),
+			static_cast<int>(a_shape.dim_size(0)),
+			static_cast<int>(a_shape.dim_size(1)),
+			static_cast<int>(b_shape.dim_size(0)));
 	}
 };
 
 
 
 // Register the CPU kernels.
-#define REGISTER_CPU(T)                                          \
-  REGISTER_KERNEL_BUILDER(                                       \
-      Name("XNORmatmul").Device(DEVICE_CPU).TypeConstraint<T>("T"), \
-      XNORmatmul<CPUDevice, T>);
+#define REGISTER_CPU(type)                                          	\
+  REGISTER_KERNEL_BUILDER(                                       		\
+      Name("XNORmatmul").Device(DEVICE_CPU).TypeConstraint<type>("T"), 	\
+      XNORmatmul<CPUDevice, type>);
 REGISTER_CPU(float);
 REGISTER_CPU(int32);
 
 // Register the GPU kernels.
 #ifdef GOOGLE_CUDA
-#define REGISTER_GPU(T)                                          \
-  extern template XNORmatmulFunctor<GPUDevice, T>;               \
-  REGISTER_KERNEL_BUILDER(                                       \
-      Name("XNORmatmul").Device(DEVICE_GPU).TypeConstraint<T>("T"), \
-      XNORmatmul<GPUDevice, T>);
+
+
+#define REGISTER_GPU(type)     											\
+  extern template struct XNORmatmulFunctor<GPUDevice, type>;					\
+  REGISTER_KERNEL_BUILDER(                                       		\
+      Name("XNORmatmul").Device(DEVICE_GPU).TypeConstraint<type>("T"), 	\
+      XNORmatmul<GPUDevice, type>);
 REGISTER_GPU(float);
 REGISTER_GPU(int32);
 #endif  // GOOGLE_CUDA

@@ -3,4 +3,5 @@ models/
 logs/
 __pycache__/
 *makefile*
-*.so*
+*.so
+*.o
