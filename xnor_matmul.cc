@@ -9,10 +9,28 @@ using namespace tensorflow;
 REGISTER_OP("XNORmatmul")
 	.Input("A: int32")
 	.Input("B: int32")
-	.Output("product: int32")
+	.Output("C: int32")
 	.SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
 		c->set_output(0, c->input(0));
 		return Status::OK();
+		
+		shape_inference::ShapeHandle input_shape;
+		TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 2, &a_shape));
+	 
+		shape_inference::ShapeHandle weight_shape;
+		TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 2, &b_shape));
+		
+		shape_inference::DimensionHandle output_rows = c->Dim(b_shape, 0);
+	  
+		shape_inference::DimensionHandle output_cols = c->Dim(a_shape, 0);
+		shape_inference::DimensionHandle weight_cols = c->Dim(b_shape, 1);
+		
+		shape_inference::DimensionHandle merged;
+		TF_RETURN_IF_ERROR(c->Merge(input_rows, weight_cols, &merged));
+	 
+		c->set_output(0, c->Matrix(output_rows, 1));
+		return Status::OK();
+		
 });
 
 
@@ -44,20 +62,35 @@ class XNORmatmul : public OpKernel {
 		// matrix tensors to be multiplicated together
 		const Tensor& a_mtx_tensor = context->input(0);
 		const Tensor& b_mtx_tensor = context->input(0);
-
-		// Creating and allocating the output tensor
-		Tensor* output_tensor = NULL;
-		OP_REQUIRES_OK(context, context->allocate_output(0, input_tensor.shape(), &output_tensor));
-
-		OP_REQUIRES(context, input_tensor.NumElements() <= tensorflow::kint32max,
-					errors::InvalidArgument("Too many elements in tensor"));
 		
+		// getting matrices dimesions
+		const TensorShape& a_shape = a_mtx_tensor.shape();
+		const TensorShape& b_shape = b_mtx_tensor.shape();
+		
+		//checking matrix dimensions
+		DCHECK_EQ(a_shape.dim_size(1), b_shape.dim_size(0));
+		DCHECK_EQ(a_mtx_tensor.shape()[1] % 32, 0);
+		DCHECK_EQ(a_mtx_tensor.shape()[0] % 16, 0);
+		DCHECK_EQ(b_mtx_tensor.shape()[1] % 16, 0);
+		
+		// Creating and allocating the output tensor
+		TensorShape output_shape;
+		output_shape.AddDim(a_shape.dim_size(0));
+		output_shape.AddDim(b_shape.dim_size(1));
+		
+		Tensor* output_tensor = NULL;
+		OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &output_tensor));
+		
+		// calling multiplication kernel (on CPU or GPU)
 		XNORmatmulFunctor<Device, T>()(
 			context->eigen_device<Device>(),
 			static_cast<int>(input_tensor.NumElements()),
 			a_mtx_tensor.flat<T>().data(),
 			b_mtx_tensor.flat<T>().data(),
-			output_tensor->flat<T>().data());
+			output_tensor->flat<T>().data(),
+			a_shape.dim_size(0),
+			a_shape.dim_size(1),
+			b_shape.dim_size(0));
 	}
 };
 
