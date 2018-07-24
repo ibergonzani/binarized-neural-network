@@ -2,3 +2,5 @@ dataset/
 models/
 logs/
 __pycache__/
+*makefile*
+*.so*

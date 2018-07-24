@@ -1,34 +1,35 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
-
 #include "tensorflow/core/framework/op_kernel.h"
+
+#include "xnor_matmul.h"
 
 
 using namespace tensorflow;
 
+
 REGISTER_OP("XNORmatmul")
-	.Input("A: int32")
-	.Input("B: int32")
-	.Output("C: int32")
+	.Attr("T: {float, int32}")
+	.Input("A: T")
+	.Input("B: T")
+	.Output("C: T")
 	.SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
 		c->set_output(0, c->input(0));
 		return Status::OK();
 		
-		shape_inference::ShapeHandle input_shape;
+		shape_inference::ShapeHandle a_shape;
 		TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 2, &a_shape));
 	 
-		shape_inference::ShapeHandle weight_shape;
+		shape_inference::ShapeHandle b_shape;
 		TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 2, &b_shape));
 		
-		shape_inference::DimensionHandle output_rows = c->Dim(b_shape, 0);
-	  
-		shape_inference::DimensionHandle output_cols = c->Dim(a_shape, 0);
-		shape_inference::DimensionHandle weight_cols = c->Dim(b_shape, 1);
+		shape_inference::DimensionHandle output_rows = c->Dim(a_shape, 1);
+		shape_inference::DimensionHandle output_cols = c->Dim(b_shape, 0);
 		
-		shape_inference::DimensionHandle merged;
-		TF_RETURN_IF_ERROR(c->Merge(input_rows, weight_cols, &merged));
+		//shape_inference::DimensionHandle merged;
+		//TF_RETURN_IF_ERROR(c->Merge(input_rows, weight_cols, &merged));
 	 
-		c->set_output(0, c->Matrix(output_rows, 1));
+		c->set_output(0, c->Matrix(output_rows, output_cols));
 		return Status::OK();
 		
 });
@@ -40,10 +41,10 @@ using GPUDevice = Eigen::GpuDevice;
 // CPU specialization of actual computation.
 template <typename T>
 struct XNORmatmulFunctor<CPUDevice, T> {
-	void operator()(const CPUDevice& d, int size, const T* in, T* out) {
-		for (int i = 0; i < size; ++i) {
-			out[i] = 2 * in[i];
-		}
+	void operator()(const CPUDevice& d, const T* a_mtx, const T* b_mtx, T* out, int m, int n, int k) {
+		// for (int i = 0; i < size; ++i) {
+			// out[i] = 2 * in[i];
+		// }
 	}
 };
 
@@ -69,9 +70,9 @@ class XNORmatmul : public OpKernel {
 		
 		//checking matrix dimensions
 		DCHECK_EQ(a_shape.dim_size(1), b_shape.dim_size(0));
-		DCHECK_EQ(a_mtx_tensor.shape()[1] % 32, 0);
-		DCHECK_EQ(a_mtx_tensor.shape()[0] % 16, 0);
-		DCHECK_EQ(b_mtx_tensor.shape()[1] % 16, 0);
+		DCHECK_EQ(a_shape.dim_size(1) % 32, 0);
+		DCHECK_EQ(a_shape.dim_size(0) % 16, 0);
+		DCHECK_EQ(b_shape.dim_size(1) % 16, 0);
 		
 		// Creating and allocating the output tensor
 		TensorShape output_shape;
@@ -84,7 +85,6 @@ class XNORmatmul : public OpKernel {
 		// calling multiplication kernel (on CPU or GPU)
 		XNORmatmulFunctor<Device, T>()(
 			context->eigen_device<Device>(),
-			static_cast<int>(input_tensor.NumElements()),
 			a_mtx_tensor.flat<T>().data(),
 			b_mtx_tensor.flat<T>().data(),
 			output_tensor->flat<T>().data(),

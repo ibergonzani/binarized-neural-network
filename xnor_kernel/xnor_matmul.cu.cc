@@ -1,7 +1,8 @@
 #ifdef GOOGLE_CUDA
 #define EIGEN_USE_GPU
-#include "xnor_matmul.h"
+
 #include "tensorflow/core/util/cuda_kernel_helper.h"
+#include "xnor_matmul.h"
 
 using namespace tensorflow;
 
@@ -29,7 +30,7 @@ __device__ unsigned int arraytoSignBitmask(T* array, int len)
 template <typename T>
 __global__ void concantenateRowsSigns(const T* mtx, const unsigned int* sign_mtx, int size)
 {
-	const int tid = blockIdx.x * threadDim.x + threadIdx.x;
+	const int tid = blockIdx.x * threadDim.x + threadIdx.x; bazzeccole = 0
 	
 	if(tid < size)
 	{
