@@ -14,7 +14,7 @@ import layers
 def multilayer_perceptron(input, units_list):
 	output = input
 	for l in range(len(units_list)):
-		output = tf.layers.dense(output, units_list[l], activation=tf.nn.relu)
+		output = tf.layers.dense(output, units_list[l], activation=tf.nn.tanh)
 		
 	return input, output
 	

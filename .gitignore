@@ -2,6 +2,7 @@ dataset/
 models/
 logs/
 __pycache__/
+MNIST_data/
 *makefile*
 *.so
 *.o
