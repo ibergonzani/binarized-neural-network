@@ -23,10 +23,8 @@ def load_mnist():
 
 def random_dataset():
 	n_samples = 1000
-	idim = 30
-	odim = 3
+	idim, odim = 30, 3
 	x = np.random.rand(n_samples, idim)
-	#y = np.array([ [(np.sign(np.sin(x1*x2)*x3)+1)/2, np.around(x1)] for (x1, x2, x3) in x])
 	y = np.zeros((n_samples, odim))
 	J = np.random.choice(odim, n_samples)
 	y[np.arange(n_samples), J] = 1
@@ -69,10 +67,10 @@ batch_size = tf.placeholder(tf.int64)
 data_features, data_labels = tf.placeholder(tf.float32, (None,)+x_train.shape[1:]), tf.placeholder(tf.float32, (None,)+y_train.shape[1:])
 
 train_data = tf.data.Dataset.from_tensor_slices((data_features, data_labels))
-train_data = train_data.batch(batch_size).repeat()
+train_data = train_data.batch(batch_size).repeat().shuffle(x_train.shape[0])
 
 test_data = tf.data.Dataset.from_tensor_slices((data_features, data_labels))
-test_data = test_data.batch(batch_size).repeat()
+test_data = test_data.batch(batch_size).repeat().shuffle(x_train.shape[0])
 
 data_iterator = tf.data.Iterator.from_structure(train_data.output_types, train_data.output_shapes)
 
@@ -80,28 +78,37 @@ features, labels = data_iterator.get_next()
 train_initialization = data_iterator.make_initializer(train_data)
 test_initialization = data_iterator.make_initializer(test_data)
 
+
 # network initialization
-xnet, ynet = networks.multilayer_perceptron(features, [2048, 2048, 2048, 10])
+xnet, ynet = networks.binary_multilayer_perceptron(features, [2048, 2048, 2048, 10])
 ysoft = tf.nn.softmax(ynet)
 
 with tf.name_scope('trainer_optimizer'):
 	optimizer = tf.train.AdamOptimizer(learning_rate=1e-3)
 	loss = tf.losses.mean_squared_error(labels, ysoft)
 	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=ynet, labels=tf.argmax(labels, axis=1))
-	train_op = optimizer.minimize(loss=cross_entropy)
+	
+	global_step = tf.train.get_or_create_global_step()
+	train_op = optimizer.minimize(loss=cross_entropy, global_step=global_step)
 
-with tf.name_scope('metrics'):
-	accuracy, acc_update = tf.metrics.accuracy(tf.argmax(labels, axis=1), tf.argmax(ysoft, axis=1), name="metric")
-	precision, pre_update = tf.metrics.precision(tf.argmax(labels, axis=1), tf.argmax(ysoft, axis=1), name="metric")
-	recall, rec_update = tf.metrics.recall(tf.argmax(labels, axis=1), tf.argmax(ysoft, axis=1), name="metric")
+# metrics definition
+with tf.variable_scope('metrics'):
+	mloss, mloss_update	  = tf.metrics.mean(loss)
+	accuracy, acc_update  = tf.metrics.accuracy(  tf.argmax(labels, axis=1), tf.argmax(ysoft, axis=1))
 
-	metrics = [accuracy, precision, recall]
-	metrics_update = [acc_update, pre_update, rec_update]
+	metrics = [mloss, accuracy]
+	metrics_update = [mloss_update, acc_update]
 
 # Isolate the variables stored behind the scenes by the metric operation
-running_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="metric")
-metrics_initializer = tf.variables_initializer(var_list=running_vars)
-	
+metrics_variables = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="metrics")
+metrics_initializer = tf.variables_initializer(metrics_variables)
+
+
+# summaries
+los_sum = tf.summary.scalar('loss', mloss)
+acc_sum = tf.summary.scalar('accuracy', accuracy)
+merged_summary = tf.summary.merge([los_sum, acc_sum])
+
 
 # network weights saver
 saver = tf.train.Saver()
@@ -119,8 +126,7 @@ with tf.Session() as sess:
 	
 	for epoch in range(EPOCHS):
 		
-		trn_loss = 0
-		val_loss = 0
+		print("\nEPOCH %d/%d" % (epoch+1, EPOCHS))
 		
 		# initialize training dataset
 		sess.run(train_initialization, feed_dict={data_features:x_train, data_labels:y_train, batch_size:BATCH_SIZE})
@@ -128,17 +134,16 @@ with tf.Session() as sess:
 		
 		# Training of the network
 		for nb in range(NUM_BATCHES_TRAIN):
-			outg, outn, batch_trn_loss, _, _, _, _ = sess.run([labels, ysoft, loss, train_op] + metrics_update)	# train network on a single batch
-			a, p, r = sess.run(metrics)
+			outg, outn, _= sess.run([labels, ysoft, train_op])	# train network on a single batch
+			batch_trn_loss, _ = sess.run(metrics_update)
+			trn_loss, a = sess.run(metrics)
 			
-			trn_loss = trn_loss + batch_trn_loss											# accumulating loss
-			print("EPOCH %d, training %.1f%%,   acc: %.3f   prec: %.3f   rec: %.3f   sk %.3f"
-					% (epoch+1, 100*(nb+1)/NUM_BATCHES_TRAIN, a, p, r, accuracy_score(outg, np.around(outn))), end='\r')
+			print("train %.1f%%, loss %.4f,  acc: %.3f" % (100*(nb+1)/NUM_BATCHES_TRAIN, trn_loss, a), end='\r')
+		print()
+		#print("train 100%%, loss %.4f,  acc: %.3f" % (trn_loss, a))
+		summary = sess.run(merged_summary)
+		train_writer.add_summary(summary, epoch)
 		
-		trn_loss = trn_loss / NUM_BATCHES_TRAIN				# naive mean loss
-		print("EPOCH %d, training 100%%, loss %.4f,  acc: %.3f   prec: %.3f   rec: %.3f"
-				% (epoch+1, trn_loss, a, p, r))
-			
 		
 		# initialize the test dataset
 		sess.run(test_initialization, feed_dict={data_features:x_test, data_labels:y_test, batch_size:BATCH_SIZE})
@@ -146,19 +151,15 @@ with tf.Session() as sess:
 		
 		# evaluation of the network
 		for nb in range(NUM_BATCHES_TEST):
-			batch_val_loss = sess.run(loss)				# evaluate network on single batch
-			val_loss = val_loss + batch_val_loss		# accumulating loss
-			print("EPOCH %d, evaluation %.1f%%" % (epoch+1, 100*(nb+1)/NUM_BATCHES_TEST), end='\r')
-		
-		val_loss = val_loss / NUM_BATCHES_TEST			# naive mean loss
-		print("EPOCH %d, evaluation 100%%, loss %.4f" % (epoch+1, val_loss))
-		
-		
-		summary = tf.Summary(value=[tf.Summary.Value(tag="MSE loss", simple_value=trn_loss)])
-		train_writer.add_summary(summary, epoch)
-		summary = tf.Summary(value=[tf.Summary.Value(tag="MSE loss", simple_value=val_loss)])
+			sess.run([loss, metrics_update])
+			val_loss, a = sess.run(metrics)
+			
+			print(" eval %.1f%%, loss %.4f,   acc: %.3f" % (100*(nb+1)/NUM_BATCHES_TEST, val_loss, a), end='\r')
+		print()
+		#print(" eval 100%%, loss %.4f,   acc: %.3f" % (val_loss, a))
+		summary  = sess.run(merged_summary)
 		test_writer.add_summary(summary, epoch)
-	
+		
 	
 	train_writer.close()
 	test_writer.close()
