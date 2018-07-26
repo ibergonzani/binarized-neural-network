@@ -8,7 +8,8 @@ import os
 
 from tensorflow.examples.tutorials.mnist import input_data
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+
+from utils.progressbar import ProgressBar
 
 
 
@@ -49,7 +50,8 @@ BATCH_SIZE = args.batchsize
 
 timestamp = int(time.time())
 
-train_logdir = os.path.join(LOGDIR, str(timestamp), 'train')
+session_logdir = os.path.join(LOGDIR, str(timestamp))
+train_logdir = os.path.join(session_logdir, 'train')
 test_logdir = os.path.join(LOGDIR, str(timestamp), 'test')
 
 if not os.path.exists(MODELDIR):
@@ -132,15 +134,18 @@ with tf.Session() as sess:
 		sess.run(train_initialization, feed_dict={data_features:x_train, data_labels:y_train, batch_size:BATCH_SIZE})
 		sess.run(metrics_initializer)
 		
+		progress = ProgressBar(total=NUM_BATCHES_TRAIN, prefix=' train', show=True)
+		
 		# Training of the network
 		for nb in range(NUM_BATCHES_TRAIN):
 			outg, outn, _= sess.run([labels, ysoft, train_op])	# train network on a single batch
 			batch_trn_loss, _ = sess.run(metrics_update)
 			trn_loss, a = sess.run(metrics)
 			
-			print("train %.1f%%, loss %.4f,  acc: %.3f" % (100*(nb+1)/NUM_BATCHES_TRAIN, trn_loss, a), end='\r')
+			# print("train %.1f%%, loss %.4f,  acc: %.3f" % (100*(nb+1)/NUM_BATCHES_TRAIN, trn_loss, a), end='\r')
+			progress.update_and_show( suffix = '  loss {:.4f},  acc: {:.3f}'.format(trn_loss, a) )
 		print()
-		#print("train 100%%, loss %.4f,  acc: %.3f" % (trn_loss, a))
+		
 		summary = sess.run(merged_summary)
 		train_writer.add_summary(summary, epoch)
 		
@@ -149,14 +154,17 @@ with tf.Session() as sess:
 		sess.run(test_initialization, feed_dict={data_features:x_test, data_labels:y_test, batch_size:BATCH_SIZE})
 		sess.run(metrics_initializer)
 		
+		progress = ProgressBar(total=NUM_BATCHES_TEST, prefix='  eval', show=True)
+		
 		# evaluation of the network
 		for nb in range(NUM_BATCHES_TEST):
 			sess.run([loss, metrics_update])
 			val_loss, a = sess.run(metrics)
 			
-			print(" eval %.1f%%, loss %.4f,   acc: %.3f" % (100*(nb+1)/NUM_BATCHES_TEST, val_loss, a), end='\r')
+			#print(" eval %.1f%%, loss %.4f,  acc: %.3f" % (100*(nb+1)/NUM_BATCHES_TEST, val_loss, a), end='\r')
+			progress.update_and_show( suffix = '  loss {:.4f},  acc: {:.3f}'.format(val_loss, a) )
 		print()
-		#print(" eval 100%%, loss %.4f,   acc: %.3f" % (val_loss, a))
+		
 		summary  = sess.run(merged_summary)
 		test_writer.add_summary(summary, epoch)
 		
@@ -165,3 +173,5 @@ with tf.Session() as sess:
 	test_writer.close()
 
 	saver.save(sess, MODELDIR+"/model.ckpt")
+
+print('\nTraining completed!\nNetwork model is saved in  {}\nTraining logs are saved in {}'.format(MODELDIR, session_logdir))
