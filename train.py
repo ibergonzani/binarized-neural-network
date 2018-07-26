@@ -6,33 +6,11 @@ import math
 import time
 import os
 
-from tensorflow.examples.tutorials.mnist import input_data
-from sklearn.model_selection import train_test_split
-
+import utils.datasets as datasets
 from utils.progressbar import ProgressBar
 
 
 
-def load_mnist():
-	mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-	x_train = mnist.train.images
-	y_train = mnist.train.labels
-	x_test = mnist.test.images
-	y_test = mnist.test.labels
-	return x_train, y_train, x_test, y_test
-	
-
-def random_dataset():
-	n_samples = 1000
-	idim, odim = 30, 3
-	x = np.random.rand(n_samples, idim)
-	y = np.zeros((n_samples, odim))
-	J = np.random.choice(odim, n_samples)
-	y[np.arange(n_samples), J] = 1
-	
-	x_trn, x_tst, y_trn, y_tst = train_test_split(x, y, test_size=0.3, random_state=42)
-	return x_trn, y_trn, x_tst, y_tst
-		
 
 parser = argparse.ArgumentParser(description='Training module for binarized nets')
 parser.add_argument('--network', dest='network', type=str, choices=networks.netlist(), help='Type of network to be used')
@@ -46,6 +24,7 @@ MODELDIR = args.modeldir
 LOGDIR = args.logdir
 EPOCHS = args.epochs
 BATCH_SIZE = args.batchsize
+
 
 
 timestamp = int(time.time())
@@ -62,8 +41,9 @@ if not os.path.exists(test_logdir):
 	os.makedirs(test_logdir)
 	
 
+	
 # dataset preparation using tensorflow dataset iterators
-x_train, y_train, x_test, y_test = load_mnist() #random_dataset()
+x_train, y_train, x_test, y_test = datasets.load_mnist() #random_dataset()
 
 batch_size = tf.placeholder(tf.int64)
 data_features, data_labels = tf.placeholder(tf.float32, (None,)+x_train.shape[1:]), tf.placeholder(tf.float32, (None,)+y_train.shape[1:])
@@ -106,14 +86,18 @@ metrics_variables = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="metri
 metrics_initializer = tf.variables_initializer(metrics_variables)
 
 
+
 # summaries
 los_sum = tf.summary.scalar('loss', mloss)
 acc_sum = tf.summary.scalar('accuracy', accuracy)
 merged_summary = tf.summary.merge([los_sum, acc_sum])
 
 
+
 # network weights saver
 saver = tf.train.Saver()
+
+
 
 NUM_BATCHES_TRAIN = math.ceil(x_train.shape[0] / BATCH_SIZE)
 NUM_BATCHES_TEST = math.ceil(x_test.shape[0] / BATCH_SIZE)
@@ -130,11 +114,12 @@ with tf.Session() as sess:
 		
 		print("\nEPOCH %d/%d" % (epoch+1, EPOCHS))
 		
+		
 		# initialize training dataset
 		sess.run(train_initialization, feed_dict={data_features:x_train, data_labels:y_train, batch_size:BATCH_SIZE})
 		sess.run(metrics_initializer)
 		
-		progress = ProgressBar(total=NUM_BATCHES_TRAIN, prefix=' train', show=True)
+		progress_info = ProgressBar(total=NUM_BATCHES_TRAIN, prefix=' train', show=True)
 		
 		# Training of the network
 		for nb in range(NUM_BATCHES_TRAIN):
@@ -142,27 +127,26 @@ with tf.Session() as sess:
 			batch_trn_loss, _ = sess.run(metrics_update)
 			trn_loss, a = sess.run(metrics)
 			
-			# print("train %.1f%%, loss %.4f,  acc: %.3f" % (100*(nb+1)/NUM_BATCHES_TRAIN, trn_loss, a), end='\r')
-			progress.update_and_show( suffix = '  loss {:.4f},  acc: {:.3f}'.format(trn_loss, a) )
+			progress_info.update_and_show( suffix = '  loss {:.4f},  acc: {:.3f}'.format(trn_loss, a) )
 		print()
 		
 		summary = sess.run(merged_summary)
 		train_writer.add_summary(summary, epoch)
 		
 		
+		
 		# initialize the test dataset
 		sess.run(test_initialization, feed_dict={data_features:x_test, data_labels:y_test, batch_size:BATCH_SIZE})
 		sess.run(metrics_initializer)
 		
-		progress = ProgressBar(total=NUM_BATCHES_TEST, prefix='  eval', show=True)
+		progress_info = ProgressBar(total=NUM_BATCHES_TEST, prefix='  eval', show=True)
 		
 		# evaluation of the network
 		for nb in range(NUM_BATCHES_TEST):
 			sess.run([loss, metrics_update])
 			val_loss, a = sess.run(metrics)
 			
-			#print(" eval %.1f%%, loss %.4f,  acc: %.3f" % (100*(nb+1)/NUM_BATCHES_TEST, val_loss, a), end='\r')
-			progress.update_and_show( suffix = '  loss {:.4f},  acc: {:.3f}'.format(val_loss, a) )
+			progress_info.update_and_show( suffix = '  loss {:.4f},  acc: {:.3f}'.format(val_loss, a) )
 		print()
 		
 		summary  = sess.run(merged_summary)
