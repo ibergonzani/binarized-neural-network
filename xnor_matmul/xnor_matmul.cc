@@ -14,8 +14,6 @@ REGISTER_OP("XnorMatmul")
 	.Input("b: T")
 	.Output("c: T")
 	.SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
-		c->set_output(0, c->input(0));
-		return Status::OK();
 		
 		shape_inference::ShapeHandle a_shape;
 		TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 2, &a_shape));
@@ -23,8 +21,10 @@ REGISTER_OP("XnorMatmul")
 		shape_inference::ShapeHandle b_shape;
 		TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 2, &b_shape));
 		
-		shape_inference::DimensionHandle output_rows = c->Dim(a_shape, 1);
-		shape_inference::DimensionHandle output_cols = c->Dim(b_shape, 0);
+		shape_inference::DimensionHandle output_rows = c->Dim(a_shape, 0);
+		shape_inference::DimensionHandle output_cols = c->Dim(b_shape, 1);
+		
+		// std::cout <<"DIMENSION in output: " <<c->Dim(a_shape, 1) <<" " <<c->Dim(b_shape, 0) <<std::endl;
 		
 		//shape_inference::DimensionHandle merged;
 		//TF_RETURN_IF_ERROR(c->Merge(input_rows, weight_cols, &merged));
@@ -74,6 +74,8 @@ class XnorMatmul : public OpKernel {
 		DCHECK_EQ(a_shape.dim_size(0) % 16, 0);
 		DCHECK_EQ(b_shape.dim_size(1) % 16, 0);
 		
+		std::cout <<"DIMENSION in output: " <<a_shape.dim_size(0) <<" " <<a_shape.dim_size(1) <<" " <<b_shape.dim_size(1) <<std::endl;
+		
 		// Creating and allocating the output tensor
 		TensorShape output_shape;
 		output_shape.AddDim(a_shape.dim_size(0));
@@ -81,6 +83,15 @@ class XnorMatmul : public OpKernel {
 		
 		Tensor* output_tensor = NULL;
 		OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &output_tensor));
+		
+		// Creating and allocating support tensors
+		
+		// Tensor* a_cct_tensor = NULL;
+		// OP_REQUIRES_OK(context, contex->allocate_persistent(0, , &a_cct_tensor));
+		
+		// Tensor* b_cct_tensor = NULL;
+		// OP_REQUIRES_OK(context, contex->allocate_persistent(0, , &b_cct_tensor));
+		
 		
 		// calling multiplication kernel (on CPU or GPU)
 		XnorMatmulFunctor<Device, T>()(

@@ -62,7 +62,7 @@ test_initialization = data_iterator.make_initializer(test_data)
 
 
 # network initialization
-xnet, ynet = networks.binary_multilayer_perceptron(features, [2048, 2048, 2048, 10])
+xnet, ynet = networks.multilayer_perceptron(features, [2048, 2048, 2048, 10])
 ysoft = tf.nn.softmax(ynet)
 
 with tf.name_scope('trainer_optimizer'):
@@ -86,17 +86,14 @@ metrics_variables = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="metri
 metrics_initializer = tf.variables_initializer(metrics_variables)
 
 
-
 # summaries
 los_sum = tf.summary.scalar('loss', mloss)
 acc_sum = tf.summary.scalar('accuracy', accuracy)
 merged_summary = tf.summary.merge([los_sum, acc_sum])
 
 
-
 # network weights saver
 saver = tf.train.Saver()
-
 
 
 NUM_BATCHES_TRAIN = math.ceil(x_train.shape[0] / BATCH_SIZE)

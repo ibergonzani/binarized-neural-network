@@ -9,7 +9,7 @@ using namespace tensorflow;
 
 using GPUDevice = Eigen::GpuDevice;
 
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 32
 
 
 template <typename T>
@@ -78,96 +78,54 @@ __global__ void matmulCudaKernel(unsigned int* a_mtx, unsigned int* b_mtx, T* c_
 	int col = threadIdx.x;
 	int row = threadIdx.y;
 		
-	T* Csub = c_mtx + (block_row * BLOCK_SIZE * k + block_col * BLOCK_SIZE);
+	// T* Csub = c_mtx + (block_row * blockDim.y * k + block_col * blockDim.x);
 	
-	// each thread copy its submatrix data in in shared memory
-	// each A submatrix block is BLOCK_SIZE*32 --> hence BLOCK_SIZE wide unsigned int (32 bits) array
-	// each B submatrix block is 32*BLOCK_SIZE --> hence BLOCK_SIZE wide unsigned int (32 bits) array
-	__shared__ unsigned int Asub[BLOCK_SIZE];
-	__shared__ unsigned int Bsub[BLOCK_SIZE];
+	// // each thread copy its submatrix data in in shared memory
+	// // each A submatrix block is BLOCK_SIZE*32 --> hence BLOCK_SIZE wide unsigned int (32 bits) array
+	// // each B submatrix block is 32*BLOCK_SIZE --> hence BLOCK_SIZE wide unsigned int (32 bits) array
+	// // __shared__ unsigned int Asub[BLOCK_SIZE];
+	// // __shared__ unsigned int Bsub[BLOCK_SIZE];
 	
+	// unsigned int c_value = 0;
+	
+	// // computing submatrix C_xy associated to the thread block as sum_i(A_xi * B_iy)
+	// for(int i = 0; i < n / 32; ++i)
+	// {
+		// // getting firt element pointer of submatrix A_xi and B_iy
+		// unsigned int* As = a_mtx + (block_row * blockDim.y * n / 32 + blockDim.x * i); 	// a_mtx is a concatenation of rows with 32 elements grouped in one uint
+		// unsigned int* Bs = b_mtx + (i * BLOCK_SIZE * k + BLOCK_SIZE * block_col);		// b_mtx is a concatenation of columns with 32 elements grouped in one uint
+		
+		// // copy submatrix A_xi and submatrix B_iy to shared memory (each thread one element)
+		// // Asub[row] = As[row * n + col];
+		// // Bsub[col] = Bs[row * k + col];
+		
+		// // evaluating c_value only after all the block threads have copied their part of A and B in shared memory
+		// // __syncthreads();
+		
+		// // c_value += __popc((Asub[row] ^ Bsub[col]));
+		// c_value += __popc((As[row * n + col] ^ Bs[row * k + col]));
+		
+		// // __syncthreads();
+	// }	
+	
+	// Csub[row * k + col] = c_value - (n - c_value);
+	
+	
+	// NAIVE PARALLEL MULTIPLICATION CODE (NOT OPTIMIZED)
+	int trow = block_row * blockDim.y + row;
+	int tcol = block_col * blockDim.x + col;
+	
+	if(trow >= m || tcol >= k)
+		return;
+	
+	unsigned int* Ar = a_mtx + (trow * (n / 32));
+	unsigned int* Bc = b_mtx + (tcol * (n / 32));
 	unsigned int c_value = 0;
 	
-	// computing submatrix C_xy associated to the thread block as sum_i(A_xi * B_iy)
-	for(int i = 0; i < n / BLOCK_SIZE; ++i)
-	{
-		// getting firt element pointer of submatrix A_xi and B_iy
-		unsigned int* As = a_mtx + (block_row * BLOCK_SIZE * n / 32 + BLOCK_SIZE * i); 	// a_mtx is a concatenation of rows with 32 elements grouped in one uint
-		unsigned int* Bs = b_mtx + (i * BLOCK_SIZE * k + BLOCK_SIZE * block_col);		// b_mtx is a concatenation of columns with 32 elements grouped in one uint
-		
-		// copy submatrix A_xi and submatrix B_iy to shared memory (each thread one element)
-		Asub[row] = As[row * n + col];
-		Bsub[col] = Bs[row * k + col];
-		
-		// evaluating c_value only after all the block threads have copied their part of A and B in shared memory
-		__syncthreads();
-		
-		c_value += __popc((Asub[row] ^ Bsub[col]));
-		
-		__syncthreads();
-	}	
+	for(int i = 0; i < n / 32; ++i)
+		c_value += __popc(Ar[i] ^ Bc[i]);
 	
-	Csub[row * k + col] = c_value - (n - c_value);
-}
-
-
-template <typename T>
-__global__ void xnor_gemm(unsigned int* A, unsigned int* B, T* C, int m, int n, int k) {
-    
-    // Block row and column
-    int blockRow = blockIdx.y;
-    int blockCol = blockIdx.x;
-    
-    // Thread row and column within Csub
-    int row = threadIdx.y;
-    int col = threadIdx.x;
-
-    // Each thread block computes one sub-matrix Csub of C
-    float* Csub = &C[BLOCK_SIZE * k * blockRow + BLOCK_SIZE * blockCol];
-
-    // Shared memory used to store Asub and Bsub respectively
-    __shared__ unsigned int As[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ unsigned int Bs[BLOCK_SIZE][BLOCK_SIZE];
-    
-    // Each thread computes one element of Csub
-    // by accumulating results into Cvalue
-    // block_size = 16 -> 256 threads, one per Csub element
-    unsigned int Cvalue = 0;
-    
-    // Loop over all the sub-matrices of A and B that are
-    // required to compute Csub
-    // Multiply each pair of sub-matrices together
-    // and accumulate the results
-    for (int i = 0; i < (n / BLOCK_SIZE); ++i) {
-    
-        // Get sub-matrix Asub of A
-        unsigned int* Asub = &A[BLOCK_SIZE * blockRow * n + BLOCK_SIZE * i];
-        
-        // Get sub-matrix Bsub of B
-        unsigned int* Bsub = &B[BLOCK_SIZE * k * i + BLOCK_SIZE * blockCol];
-        
-        // Load Asub and Bsub from device memory to shared memory
-        // Each thread loads one element of each sub-matrix
-        As[row][col] = Asub[row*n+col];
-        Bs[row][col] = Bsub[row*k+col];
-    
-        // Synchronize to make sure the sub-matrices are loaded
-        // before starting the computation
-        __syncthreads();
-        
-        // Multiply Asub and Bsub together
-        // THIS IS THE MOST INTERESTING PART
-        for (int j = 0; j < BLOCK_SIZE; ++j) Cvalue += __popc(As[row][j]^Bs[j][col]);
-        
-        // Synchronize to make sure that the preceding
-        // computation is done before loading two new
-        // sub-matrices of A and B in the next iteration
-        __syncthreads();
-    }
-    
-    // Write Csub to device memory
-    // Each thread writes one element
-    if(col + blockCol* BLOCK_SIZE< k && row + blockRow* BLOCK_SIZE< m) Csub[row*k+col] = -(2*(float)Cvalue-32*n);
+	c_mtx[trow * k + tcol] = -(static_cast<T>(2 * c_value) - n);
 }
 
 
@@ -177,7 +135,7 @@ template <typename T>
 void XnorMatmulFunctor<GPUDevice, T>::operator()(const GPUDevice& d, T* a_mtx, T* b_mtx, T* out, int m, int n, int k)
 {
 	
-	// allocate memory for concatenated A matrix and b matrix
+	// // allocate memory for concatenated A matrix and b matrix
 	unsigned int* ac;
 	unsigned int* bc;
 	
@@ -185,15 +143,15 @@ void XnorMatmulFunctor<GPUDevice, T>::operator()(const GPUDevice& d, T* a_mtx, T
 	cudaMalloc((void**)&bc, n*k*sizeof(unsigned int) / 32);
 	
 	int thread_per_block = 32;
-	int block_count = ceil(m * n / 32);
-	concantenateRowsSigns<T> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac, m*n/32);
+	int block_count = (m * n) / (thread_per_block * 32) + 1;
+	concantenateRowsSigns<T> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac, (m*n)/32);
 	
-	block_count = n * k /32;
-	concantenateColumnsSigns<T> <<<block_count, thread_per_block, 0, d.stream()>>> (b_mtx, bc, m, n, n*k/32);
+	block_count = (n * k) / (thread_per_block * 32) + 1;
+	concantenateColumnsSigns<T> <<<block_count, thread_per_block, 0, d.stream()>>> (b_mtx, bc, n, k, (n*k)/32);
 	
 	dim3 block_dims(k/32, m/BLOCK_SIZE);
 	dim3 thread_dims(32, BLOCK_SIZE);
-	matmulCudaKernel<T><<<block_count, thread_per_block, 0, d.stream()>>>(ac, bc, out, m, n, k);
+	matmulCudaKernel<T><<<block_dims, thread_dims, 0, d.stream()>>>(ac, bc, out, m, n, k);
 	
 	cudaFree(bc);
 	cudaFree(ac);
