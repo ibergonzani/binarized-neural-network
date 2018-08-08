@@ -8,9 +8,9 @@ print("xnor_matmul loaded")
 xnor_gemm_module = tf.load_op_library('./xnor_matmul/xnor_gemm.so')
 print("xnor_gemm loaded")
 
-m = 128
+m = 512
 n = 128
-k = 128
+k = 256
 
 a_data = np.sign(np.random.rand(m, n)-0.5)
 b_data = np.sign(np.random.rand(n, k)-0.5)

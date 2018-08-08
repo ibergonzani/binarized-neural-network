@@ -67,9 +67,36 @@ __global__ void concantenateColumnsSigns(T* mtx, unsigned int* sign_mtx, int m, 
 }
 
 
+// NAIVE PARALLEL MULTIPLICATION CODE (NOT OPTIMIZED)
+// does not use shared memory to speed up memory accesses
+// one thread per resultant matrix element
+template <typename T>
+__global__ void matmulCudaKernelGlobal(unsigned int* a_mtx, unsigned int* b_mtx, T* c_mtx, int m, int n, int k)
+{
+	
+	int trow = blockIdx.y * blockDim.y + threadIdx.y;
+	int tcol = blockIdx.x * blockDim.x + threadIdx.x;
+	
+	if(trow >= m || tcol >= k)
+		return;
+
+	// number of integers to cover an entire row of A or an entire column of B
+	int nlen = n / 32;
+	
+	unsigned int* Ar = a_mtx + (trow * nlen);
+	unsigned int* Bc = b_mtx + (tcol * nlen);
+	unsigned int c_value = 0;
+	
+	for(int i = 0; i < nlen; ++i)
+		c_value += __popc(Ar[i] ^ Bc[i]);
+	
+	c_mtx[trow * k + tcol] = -(static_cast<T>(2 * c_value) - n);
+}
+
+
 
 template <typename T>
-__global__ void matmulCudaKernel(unsigned int* a_mtx, unsigned int* b_mtx, T* c_mtx, int m, int n, int k)
+__global__ void matmulCudaKernelShared(unsigned int* a_mtx, unsigned int* b_mtx, T* c_mtx, int m, int n, int k)
 {
 	
 	int block_col = blockIdx.x;
@@ -151,7 +178,7 @@ void XnorMatmulFunctor<GPUDevice, T>::operator()(const GPUDevice& d, T* a_mtx, T
 	
 	dim3 block_dims(k/32, m/BLOCK_SIZE);
 	dim3 thread_dims(32, BLOCK_SIZE);
-	matmulCudaKernel<T><<<block_dims, thread_dims, 0, d.stream()>>>(ac, bc, out, m, n, k);
+	matmulCudaKernelGlobal<T><<<block_dims, thread_dims, 0, d.stream()>>>(ac, bc, out, m, n, k);
 	
 	cudaFree(bc);
 	cudaFree(ac);

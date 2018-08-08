@@ -101,7 +101,7 @@ class XnorMatmul : public OpKernel {
 			(T*)&(output_tensor->flat<T>()(0)),
 			static_cast<int>(a_shape.dim_size(0)),
 			static_cast<int>(a_shape.dim_size(1)),
-			static_cast<int>(b_shape.dim_size(0)));
+			static_cast<int>(b_shape.dim_size(1)));
 	}
 };
 
