@@ -16,7 +16,7 @@ k = 1024
 a_data = np.sign(np.random.rand(m, n)-0.5)
 b_data = np.sign(np.random.rand(n, k)-0.5)
 
-print(a_data, b_data)
+# print(a_data, b_data)
 
 # operation definitions
 a = tf.placeholder(tf.float32, (m, n))

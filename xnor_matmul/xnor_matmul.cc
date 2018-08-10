@@ -64,7 +64,7 @@ class XnorMatmul : public OpKernel {
 	// Operation inmplementation. Calls the correct template method based on the device
 	void Compute(OpKernelContext* context) override {
 		
-		using mask_t = unsigned long long; 
+		using mask_t = unsigned int; 
 		
 		// matrix tensors to be multiplicated together
 		const Tensor& a_mtx_tensor = context->input(0);
