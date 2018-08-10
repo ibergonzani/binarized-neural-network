@@ -1,6 +1,8 @@
 dataset/
 models/
 logs/
+xnor_matmul/logs/
+xnor_matmul/__testConc.py
 *__pycache__*
 *makefile*
 *.so
