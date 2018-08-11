@@ -25,6 +25,7 @@ __device__ __forceinline__ int __popcnt<unsigned long long>(unsigned long long x
 }
 
 
+
 template <typename T, typename Mask>
 __device__ unsigned int signArraytoBitmask(T* array, int len)
 {
@@ -39,7 +40,6 @@ __device__ unsigned int signArraytoBitmask(T* array, int len)
     
 	return bitmask;
 }
-
 
 
 template <typename T, typename To>
@@ -61,20 +61,20 @@ __global__ void concantenateRowsSigns(T* mtx, To* sign_mtx, int len)
 template <typename T, typename To>
 __global__ void concantenateRowsSignsShared(T* mtx, To* sign_mtx)
 {	
-	const int wlen = sizeof(To) * 8;
-	const int mult = wlen / 32;
+	const int t_size = sizeof(To) * 8;
+	const int mult = t_size / 32;
 	
-	__shared__ To signs[wlen];
+	__shared__ To signs[t_size];
 	
 	int itid = threadIdx.x * mult;
 	
 	for(int i=0; i < mult; ++i)
-		signs[itid + i] = (mtx[blockIdx.x * blockDim.x + itid + i] >= 0);
+		signs[itid + i] = (mtx[blockIdx.x * t_size + itid + i] >= 0);
 	
 	// syncthreads() not necessary because all threads in a warp (32) execute the same instruction
 	// if there is no warp divergence, it is safe also without sync
 	
-	for(int i = 2; i <=	wlen/2; i = i * 2)
+	for(int i = 2; i <=	t_size/2; i = i * 2)
 	{
 		int curr_id = itid / i * i;
 		signs[curr_id] = signs[curr_id] | (signs[curr_id + i/2] << (i/2));	
@@ -83,7 +83,7 @@ __global__ void concantenateRowsSignsShared(T* mtx, To* sign_mtx)
 	// here there is warp divergence but it is faster to access signs with one thread and
 	// in any case there is no more computation that would require a sync
 	if(threadIdx.x == 0)
-		sign_mtx[blockIdx.x] = signs[0] | (signs[wlen/2] << wlen/2);
+		sign_mtx[blockIdx.x] = signs[0] | (signs[t_size/2] << t_size/2);
 }
 
 
@@ -112,6 +112,34 @@ __global__ void concantenateColumnsSigns(T* mtx, To* sign_mtx, int m, int n, int
 		}
 		sign_mtx[tid] = bitmask;
 	}
+}
+
+template <typename T, typename To>
+__global__ void concantenateColumnsSignsShared(T* mtx, To* sign_mtx, int m, int n)
+{		
+	const int t_size = sizeof(To) * 8;
+	const int mult = t_size / 32;
+	
+	__shared__ To signs[t_size];
+	
+	const int itid = threadIdx.x * mult;
+	
+	for(int i=0; i<mult; ++i) 
+	{
+		int col = (blockIdx.x * t_size + itid + i) / m;
+		int row = (blockIdx.x * t_size + itid + i) % m;
+		signs[itid + i] = (mtx[row * n + col] >= 0);
+	}
+	
+
+	for(int i = 2; i <=	t_size/2; i = i * 2)
+	{
+		int curr_id = itid / i * i;
+		signs[curr_id] = signs[curr_id] | (signs[curr_id + i/2] << (i/2));	
+	}
+
+	if(threadIdx.x == 0)
+		sign_mtx[blockIdx.x] = signs[0] | (signs[t_size/2] << t_size/2);
 }
 
 
@@ -162,9 +190,7 @@ __global__ void matmulCudaKernelShared(Ti* a_mtx, Ti* b_mtx, T* c_mtx, int m, in
 	
 	int m_size = sizeof(Ti) * 8;	// number of value in a single mask (32 uint, 64 u long long)
 	
-	// each thread copy its submatrix data in in shared memory
-	// each A submatrix block is BLOCK_SIZE*(32*BLOCK_SIZE) --> hence BLOCK_SIZE*BLOCK_SIZE wide unsigned int (32 bits) matrix
-	// each B submatrix block is (32*BLOCK_SIZE)*BLOCK_SIZE --> hence BLOCK_SIZE*BLOCK_SIZE wide unsigned int (32 bits) matrix
+	// each thread copy its submatrix element in shared memory
 	__shared__ Ti Asub[BLOCK_SIZE][BLOCK_SIZE];
 	__shared__ Ti Bsub[BLOCK_SIZE][BLOCK_SIZE];
 	
@@ -203,7 +229,7 @@ void XnorMatmulFunctor<GPUDevice, T, mask_t>::operator()(const GPUDevice& d, T* 
 	int mask_size = sizeof(mask_t) * 8;	
 		
 	int thread_per_block = 32;	
-	int block_count = (m*n) / mask_size;
+	int block_count = (m * n) / mask_size;
 	concantenateRowsSignsShared<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac);
 	
 	// block_count = (m * n) / (thread_per_block * mask_size) + 1;
@@ -211,6 +237,9 @@ void XnorMatmulFunctor<GPUDevice, T, mask_t>::operator()(const GPUDevice& d, T* 
 	
 	block_count = (n * k) / (thread_per_block * mask_size) + 1;
 	concantenateColumnsSigns<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (b_mtx, bc, n, k, (n*k)/mask_size);
+	
+	block_count = (n * k) / mask_size;
+	concantenateColumnsSignsShared<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (b_mtx, bc, n, k);
 	
 	
 	dim3 block_dims(k/BLOCK_SIZE, m/BLOCK_SIZE);

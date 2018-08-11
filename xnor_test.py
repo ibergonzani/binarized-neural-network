@@ -23,7 +23,7 @@ a = tf.placeholder(tf.float32, (m, n))
 b = tf.placeholder(tf.float32, (n, k))
 
 stdn_mul = tf.matmul(a, b)
-xnor_mul = xnor_matmul_module.xnor_matmul(a, b)
+xnor_mul = xnor_matmul_module.xnor_matmul(a, b, group64=True)
 # xnor_gem = xnor_gemm_module.xnor_gemm(a, b)
 
 print(xnor_mul.get_shape())
@@ -52,16 +52,16 @@ with tf.Session() as sess:
 		# exect[2, i] = time.time() - start
 		
 		
-		run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-		run_metadata = tf.RunMetadata()
+		# run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+		# run_metadata = tf.RunMetadata()
 		
-		_, _ = sess.run([stdn_mul, xnor_mul], feed_dict={a: a_data, b: b_data}, options=run_options, run_metadata=run_metadata)
-		summary_writer.add_run_metadata(run_metadata, '%s step%d' % ('stdn-xnor', i))
+		# _, _ = sess.run([stdn_mul, xnor_mul], feed_dict={a: a_data, b: b_data}, options=run_options, run_metadata=run_metadata)
+		# summary_writer.add_run_metadata(run_metadata, '%s step%d' % ('stdn-xnor', i))
 		
-		fetched_timeline = timeline.Timeline(run_metadata.step_stats)
-		chrome_trace = fetched_timeline.generate_chrome_trace_format()
-		with open('xnor_matmul/logs/tracing/timeline_s%d.json' % i, 'w') as f:
-			f.write(chrome_trace)
+		# fetched_timeline = timeline.Timeline(run_metadata.step_stats)
+		# chrome_trace = fetched_timeline.generate_chrome_trace_format()
+		# with open('xnor_matmul/logs/tracing/timeline_s%d.json' % i, 'w') as f:
+			# f.write(chrome_trace)
 
 	
 	print(stdn.shape)
