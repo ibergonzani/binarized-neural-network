@@ -9,9 +9,9 @@ print("xnor_matmul loaded")
 xnor_gemm_module = tf.load_op_library('./xnor_matmul/xnor_gemm.so')
 print("xnor_gemm loaded")
 
-m = 1024
+m = 2048
 n = 2048
-k = 1024
+k = 2048
 
 a_data = np.sign(np.random.rand(m, n)-0.5)
 b_data = np.sign(np.random.rand(n, k)-0.5)
@@ -23,10 +23,11 @@ a = tf.placeholder(tf.float32, (m, n))
 b = tf.placeholder(tf.float32, (n, k))
 
 stdn_mul = tf.matmul(a, b)
-xnor_mul = xnor_matmul_module.xnor_matmul(a, b, group64=True)
+xnor_mul32 = xnor_matmul_module.xnor_matmul(a, b, group64=False)
+xnor_mul64 = xnor_matmul_module.xnor_matmul(a, b, group64=True)
 # xnor_gem = xnor_gemm_module.xnor_gemm(a, b)
 
-print(xnor_mul.get_shape())
+# print(xnor_mul32.get_shape())
 
 trial = 5
 exect = np.zeros((3, trial))
@@ -44,8 +45,12 @@ with tf.Session() as sess:
 		exect[0, i] = time.time() - start
 		
 		start = time.time()
-		xnor = sess.run(xnor_mul, feed_dict={a: a_data, b: b_data})
+		xnor32 = sess.run(xnor_mul32, feed_dict={a: a_data, b: b_data})
 		exect[1, i] = time.time() - start
+		
+		start = time.time()
+		xnor64 = sess.run(xnor_mul64, feed_dict={a: a_data, b: b_data})
+		exect[2, i] = time.time() - start
 		
 		# start = time.time()
 		# gemm = sess.run(xnor_gem, feed_dict={a: a_data, b: b_data})
@@ -64,12 +69,14 @@ with tf.Session() as sess:
 			# f.write(chrome_trace)
 
 	
-	print(stdn.shape)
-	print(xnor.shape)
+	print(stdn.shape, xnor32.shape, xnor64.shape)
+	
 	# print(gemm.shape)
-	diff_xnor = stdn - xnor
+	diff_xnor32 = stdn - xnor32
+	diff_xnor64 = stdn - xnor64
 	# diff_gemm = stdn - gemm
-	print('Difference xnor:', np.max(diff_xnor), np.min(diff_xnor))
+	print('Difference xnor 32:', np.max(diff_xnor32), np.min(diff_xnor32))
+	print('Difference xnor 64:', np.max(diff_xnor64), np.min(diff_xnor64))
 	# print('Difference gemm:', np.max(diff_gemm), np.min(diff_gemm))
 	
 	summary_writer.close()

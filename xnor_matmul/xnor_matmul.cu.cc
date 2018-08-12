@@ -12,6 +12,7 @@ using GPUDevice = Eigen::GpuDevice;
 #define BLOCK_SIZE 16
 
 
+
 template <typename T>
 __device__ __forceinline__ int __popcnt(T x)
 {
@@ -27,7 +28,7 @@ __device__ __forceinline__ int __popcnt<unsigned long long>(unsigned long long x
 
 
 template <typename T, typename Mask>
-__device__ unsigned int signArraytoBitmask(T* array, int len)
+__device__ Mask signArraytoBitmask(T* array, int len)
 {
 	Mask bitmask = 0;
     Mask sign;
@@ -227,12 +228,13 @@ void XnorMatmulFunctor<GPUDevice, T, mask_t>::operator()(const GPUDevice& d, T* 
 {
 	int mask_size = sizeof(mask_t) * 8;	
 		
-	int thread_per_block = 32;	
+	int thread_per_block = 32;
+	
 	int block_count = (m * n) / mask_size;
 	concantenateRowsSignsShared<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac);
 	
-	// block_count = (m * n) / (thread_per_block * mask_size) + 1;
-	// concantenateRowsSigns<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac, (m*n)/mask_size);
+	block_count = (m * n) / (thread_per_block * mask_size) + 1;
+	concantenateRowsSigns<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac, (m*n)/mask_size);
 	
 	block_count = (n * k) / (thread_per_block * mask_size) + 1;
 	concantenateColumnsSigns<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (b_mtx, bc, n, k, (n*k)/mask_size);
@@ -243,7 +245,7 @@ void XnorMatmulFunctor<GPUDevice, T, mask_t>::operator()(const GPUDevice& d, T* 
 	
 	dim3 block_dims(k/BLOCK_SIZE, m/BLOCK_SIZE);
 	dim3 thread_dims(BLOCK_SIZE, BLOCK_SIZE);
-	// matmulCudaKernelGlobalT<T, mask_t><<<block_dims, thread_dims, 0, d.stream()>>>(ac, bc, out, m, n, k);
+	matmulCudaKernelGlobal<T, mask_t><<<block_dims, thread_dims, 0, d.stream()>>>(ac, bc, out, m, n, k);
 	matmulCudaKernelShared<T, mask_t><<<block_dims, thread_dims, 0, d.stream()>>>(ac, bc, out, m, n, k);
 
 }
