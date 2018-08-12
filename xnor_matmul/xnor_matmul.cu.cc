@@ -69,7 +69,7 @@ __global__ void concantenateRowsSignsShared(T* mtx, To* sign_mtx)
 	int itid = threadIdx.x * mult;
 	
 	for(int i=0; i < mult; ++i)
-		signs[itid + i] = (mtx[blockIdx.x * t_size + itid + i] >= 0);
+		signs[itid + i] = (To)(mtx[blockIdx.x * t_size + itid + i] >= 0);
 	
 	// syncthreads() not necessary because all threads in a warp (32) execute the same instruction
 	// if there is no warp divergence, it is safe also without sync
@@ -128,7 +128,7 @@ __global__ void concantenateColumnsSignsShared(T* mtx, To* sign_mtx, int m, int 
 	{
 		int col = (blockIdx.x * t_size + itid + i) / m;
 		int row = (blockIdx.x * t_size + itid + i) % m;
-		signs[itid + i] = (mtx[row * n + col] >= 0);
+		signs[itid + i] = (To)(mtx[row * n + col] >= 0);
 	}
 	
 
@@ -146,7 +146,6 @@ __global__ void concantenateColumnsSignsShared(T* mtx, To* sign_mtx, int m, int 
 // NAIVE PARALLEL MULTIPLICATION CODE (NOT OPTIMIZED)
 // does not use shared memory to speed up memory accesses
 // one thread per resultant matrix element
-
 template <typename T, typename Ti>
 __global__ void matmulCudaKernelGlobal(Ti* a_mtx, Ti* b_mtx, T* c_mtx, int m, int n, int k)
 {
@@ -211,7 +210,7 @@ __global__ void matmulCudaKernelShared(Ti* a_mtx, Ti* b_mtx, T* c_mtx, int m, in
 		__syncthreads();
 		
 		for(int j=0; j < BLOCK_SIZE; ++j)
-			c_value += __popc((Asub[row][j] ^ Bsub[j][col]));
+			c_value += __popcnt((Asub[row][j] ^ Bsub[j][col]));
 		
 		__syncthreads();
 	}	
