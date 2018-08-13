@@ -1,6 +1,7 @@
 import tensorflow as tf
 import layers
 
+lr_bshift = layers.lr_binary_shift
 
 # class network():
 	
@@ -9,8 +10,9 @@ import layers
 		
 	# def _architecture(*args, **kargs):
 		# return None, None
+
+
 		
-	
 def multilayer_perceptron(input, units_list):
 	output = input
 	for l in range(len(units_list)):

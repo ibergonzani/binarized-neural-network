@@ -11,7 +11,6 @@ from utils.progressbar import ProgressBar
 
 
 
-
 parser = argparse.ArgumentParser(description='Training module for binarized nets')
 parser.add_argument('--network', dest='network', type=str, choices=networks.netlist(), help='Type of network to be used')
 parser.add_argument('--modeldir', dest='modeldir', type=str, default='./models/', help='path where to save network\'s weights')
@@ -65,8 +64,10 @@ test_initialization = data_iterator.make_initializer(test_data)
 xnet, ynet = networks.multilayer_perceptron(features, [2048, 2048, 2048, 10])
 ysoft = tf.nn.softmax(ynet)
 
+import optimizers
 with tf.name_scope('trainer_optimizer'):
 	optimizer = tf.train.AdamOptimizer(learning_rate=1e-3)
+	# optimizer = optimizers.ShiftBasedAdaMaxOptimizer(learning_rate=1e-3)
 	loss = tf.losses.mean_squared_error(labels, ysoft)
 	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=ynet, labels=tf.argmax(labels, axis=1))
 	

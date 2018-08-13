@@ -1,6 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.framework import ops
 
+
+
 def binarize(x):
 	# we also have to reassign the sign gradient otherwise it will be almost everywhere equal to zero
 	# using the straight through estimator
@@ -88,29 +90,26 @@ def binaryConv2d(inputs, filters, kernel_size, strides, padding="VALID", bias=Tr
 
 		
 
+# perform both left and right binary shift of x
+def lr_binary_shift(x, n):
+	return tf.bitwise.left_shift(tf.bitwise.right_shift(x, n), 2*n)
 
-
-# redefine gradient application
-
-# gradient = optimizer.compute_gradient()
-# binarized_gradient = 
-
-
-
+# compute the approximate power of 2 of the input x
+def ap2(x):
+	sign = tf.sign(x)
+	return sign * tf.pow(2, tf.round(tf.log(sign * x) / tf.log(2)))
 
 # batch normalization can be added using tf.contrib.batch_norm
 # as described in http://arxiv.org/abs/1502.03167
 # or by using the following function
 
 # # Shift based Batch Normalizing Transform, applied to activation (x) over a mini-batch.
-# def batchnormalization(x):
-	# # centered input
-	# cx = c - tf.mean(x, axis=1)
-	# #apx variance
-	# apx_var = tf.variance(x)
+def shift_batch_normalization(x, gamma, beta):
 	
-	# #tf.bitwise.right_shift 
-	
-	# out = 
+	cx = c - tf.mean(x, axis=1)								# centered input
+	apx_var = tf.mean(lr_binary_shift(cx, ap2(cx)), axis=1) # apx variance
+	xdot = lr_binary_shift(cx, ap2(tf.reciprocal(tf.sqrt(apx_var))))
+	out = lr_binary_shift(ap2(gamma), xdot)
+	return out
 	
 	# return out
