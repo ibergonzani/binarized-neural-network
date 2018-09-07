@@ -7,4 +7,3 @@ xnor_matmul/__testConc.py
 *makefile*
 *.so
 *.o
-optimizers.py

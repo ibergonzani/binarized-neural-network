@@ -92,17 +92,21 @@ def binaryConv2d(inputs, filters, kernel_size, strides, padding="VALID", bias=Tr
 
 # perform both left and right binary shift of x
 def lr_binary_shift(x, n):
-	return tf.bitwise.left_shift(tf.bitwise.right_shift(x, n), 2*n)
+	type = x.dtype
+	x = tf.cast(x, tf.int64)
+	n = tf.cast(n, tf.int64)
+	x = tf.bitwise.right_shift(tf.bitwise.left_shift(tf.bitwise.right_shift(x, n), 2*n), n)
+	return tf.cast(x, type)
 
 # compute the approximate power of 2 of the input x
 def ap2(x):
 	sign = tf.sign(x)
 	return sign * tf.pow(2, tf.round(tf.log(sign * x) / tf.log(2)))
 
+
 # batch normalization can be added using tf.contrib.batch_norm
 # as described in http://arxiv.org/abs/1502.03167
 # or by using the following function
-
 # # Shift based Batch Normalizing Transform, applied to activation (x) over a mini-batch.
 def shift_batch_normalization(x, gamma, beta):
 	

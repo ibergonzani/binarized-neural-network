@@ -8,6 +8,7 @@ import os
 
 import utils.datasets as datasets
 from utils.progressbar import ProgressBar
+import ShiftBasedAdaMax as optimizers
 
 
 
@@ -61,13 +62,11 @@ test_initialization = data_iterator.make_initializer(test_data)
 
 
 # network initialization
-xnet, ynet = networks.multilayer_perceptron(features, [2048, 2048, 2048, 10])
+xnet, ynet = networks.binary_multilayer_perceptron(features, [2048, 2048, 2048, 10])
 ysoft = tf.nn.softmax(ynet)
 
-import optimizers
 with tf.name_scope('trainer_optimizer'):
-	optimizer = tf.train.AdamOptimizer(learning_rate=1e-3)
-	# optimizer = optimizers.ShiftBasedAdaMaxOptimizer(learning_rate=1e-3)
+	optimizer = optimizers.ShiftBasedAdaMaxOptimizer(learning_rate=1e-3)
 	loss = tf.losses.mean_squared_error(labels, ysoft)
 	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=ynet, labels=tf.argmax(labels, axis=1))
 	
