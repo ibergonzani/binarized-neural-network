@@ -3,14 +3,6 @@ import layers
 
 lr_bshift = layers.lr_binary_shift
 
-# class network():
-	
-	# def __init__(self, *args, **kargs):
-		# self.input, self.output = _architecture(*args, **kargs)
-		
-	# def _architecture(*args, **kargs):
-		# return None, None
-
 
 		
 def multilayer_perceptron(input, units_list):
