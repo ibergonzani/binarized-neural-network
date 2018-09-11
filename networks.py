@@ -1,9 +1,6 @@
 import tensorflow as tf
 import layers
 
-lr_bshift = layers.lr_binary_shift
-
-
 		
 def multilayer_perceptron(input, units_list):
 	output = input
@@ -31,30 +28,48 @@ def cifar100(input):
 def binary_cifar100(input):
 	pass
 
-def mnist(input):
-	dr1 = tf.layer.dropout(input)
-	fc1 = tf.layers.dense(dr1, 4096, activation=tf.nn.relu)
-	dr2 = tf.layer.dropout(fc1)
-	fc2 = tf.layers.dense(fc1, 4096, activation=tf.nn.relu)
-	dr3 = tf.layer.dropout(fc1)
-	fc3 = tf.layers.dense(fc2, 4096, activation=tf.nn.relu)
-	dr4 = tf.layer.dropout(fc1)
-	output = tf.softmax(fc4, 32)
+
+# def mnist(input):
+	# dr1 = tf.layer.dropout(input)
+	# fc1 = tf.layers.dense(dr1, 4096, activation=tf.nn.relu)
+	# dr2 = tf.layer.dropout(fc1)
+	# fc2 = tf.layers.dense(dr2, 4096, activation=tf.nn.relu)
+	# dr3 = tf.layer.dropout(fc2)
+	# fc3 = tf.layers.dense(dr3, 4096, activation=tf.nn.relu)
+	# dr4 = tf.layer.dropout(fc3)
+	# output = tf.softmax(fc4, 10)
+	
+	# return input, output
+	
+
+def binary_mnist(input):
+	fc1 = layers.binaryDense(input, 2048, activation=None, name="binarydense1")
+	bn1 = tf.contrib.layers.batch_norm(fc1, name="batch_norm1")
+	ac1 = tf.clip_by_value(bn1, -1, 1)
+	fc2 = layers.binaryDense(ac1, 2048, activation=None, name="binarydense2")
+	bn2 = tf.contrib.layers.batch_norm(fc2, name="batch_norm2")
+	ac2 = tf.clip_by_value(bn2, -1, 1)
+	fc3 = layers.binaryDense(ac2, 2048, activation=None, name="binarydense3")
+	bn3 = tf.contrib.layers.batch_norm(fc3, name="batch_norm3")
+	ac3 = tf.clip_by_value(bn3, -1, 1)
+	fc4 = layers.binaryDense(ac3, 10, activation=None, name="binarydense4")
+	output = tf.contrib.layers.batch_norm(fc4, name="batch_norm4")
+	
 	return input, output
 	
-def binary_mnist(input):
-	fc1 = layers.binaryDense(input, 4096, activation=None, name="binarydense1")
-	bn1 = tf.contrib.layers.batch_norm(fc1)
+	
+def binary_mnist_sbn(input):
+	fc1 = layers.binaryDense(input, 2048, activation=None, name="binarydense1")
+	bn1 = layers.shift_batch_norm(fc1, name="batch_norm1")
 	ac1 = tf.clip_by_value(bn1, -1, 1)
-	fc2 = layers.binaryDense(ac1, 4096, activation=None, name="binarydense2")
-	bn2 = tf.contrib.layers.batch_norm(fc2)
+	fc2 = layers.binaryDense(ac1, 2048, activation=None, name="binarydense2")
+	bn2 = layers.shift_batch_norm(fc2, name="batch_norm2")
 	ac2 = tf.clip_by_value(bn2, -1, 1)
-	fc3 = layers.binaryDense(ac2, 4096, activation=None, name="binarydense3")
-	bn3 = tf.contrib.layers.batch_norm(fc3)
+	fc3 = layers.binaryDense(ac2, 2048, activation=None, name="binarydense3")
+	bn3 = layers.shift_batch_norm(fc3, name="batch_norm3")
 	ac3 = tf.clip_by_value(bn3, -1, 1)
-	fc4 = layers.binaryDense(ac3, 4096, activation=None, name="binarydense4")
-	bn4 = tf.contrib.layers.batch_norm(fc4)
-	output = tf.softmax(bn4, 32)
+	fc4 = layers.binaryDense(ac3, 10, activation=None, name="binarydense4")
+	output = layers.shift_batch_norm(fc4, name="batch_norm4")
 	
 	return input, output
 	

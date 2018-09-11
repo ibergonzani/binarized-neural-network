@@ -8,7 +8,7 @@ import os
 
 import utils.datasets as datasets
 from utils.progressbar import ProgressBar
-import ShiftBasedAdaMax as optimizers
+import optimizers
 
 
 
@@ -62,7 +62,8 @@ test_initialization = data_iterator.make_initializer(test_data)
 
 
 # network initialization
-xnet, ynet = networks.binary_multilayer_perceptron(features, [2048, 2048, 2048, 10])
+# xnet, ynet = networks.binary_multilayer_perceptron(features, [2048, 2048, 2048, 10])
+xnet, ynet = networks.binary_mnist_sbn(features)
 ysoft = tf.nn.softmax(ynet)
 
 with tf.name_scope('trainer_optimizer'):
@@ -76,7 +77,7 @@ with tf.name_scope('trainer_optimizer'):
 # metrics definition
 with tf.variable_scope('metrics'):
 	mloss, mloss_update	  = tf.metrics.mean(loss)
-	accuracy, acc_update  = tf.metrics.accuracy(  tf.argmax(labels, axis=1), tf.argmax(ysoft, axis=1))
+	accuracy, acc_update  = tf.metrics.accuracy(tf.argmax(labels, axis=1), tf.argmax(ysoft, axis=1))
 
 	metrics = [mloss, accuracy]
 	metrics_update = [mloss_update, acc_update]

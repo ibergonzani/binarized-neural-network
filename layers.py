@@ -88,32 +88,71 @@ def binaryConv2d(inputs, filters, kernel_size, strides, padding="VALID", bias=Tr
 		tf.add_to_collection(tf.GraphKeys.ACTIVATIONS, out)
 		return out
 
-		
 
-# perform both left and right binary shift of x
-def lr_binary_shift(x, n):
-	type = x.dtype
-	x = tf.cast(x, tf.int64)
-	n = tf.cast(n, tf.int64)
-	x = tf.bitwise.right_shift(tf.bitwise.left_shift(tf.bitwise.right_shift(x, n), 2*n), n)
-	return tf.cast(x, type)
-
+	
 # compute the approximate power of 2 of the input x
+# via hardware it is as simple as get the index of the most significative bit
 def ap2(x):
-	sign = tf.sign(x)
-	return sign * tf.pow(2, tf.round(tf.log(sign * x) / tf.log(2)))
+	return tf.sign(x) * tf.pow(2.0, tf.round(tf.log(tf.abs(x)) / tf.log(2.0)))
+
+	
+
+	
+
+##################################################################################################
+############################################ NOTE ################################################
+##################################################################################################
+## The functions below computing batch normalizations should use shifting operations instead of ##
+## multiplications and divisions. Clearly the shift operations are only implemented for integer ##
+## variables. For this reason the shift based batch normalizations are still implemented with   ##
+## multiplications and divisions but using only the correspondent approximated power of two in  ##
+## place of the op. right var (obtaining the same result of a shifting).						##
+## Consequently these shift based batch normalizations have a smaller precision than standars	##
+## methods and are slower than the hypotetical implementations with hardware accelerated float  ##
+## shifting. They are used only to show their behaviour.										##
+##################################################################################################
+##################################################################################################
+ 
+# Shift based Batch Normalizing Transform, applied to activation (x) over a mini-batch,
+#as described in http://arxiv.org/abs/1502.03167
+def shift_batch_norm(x, reuse=False, name="batch_norm"):
+	
+	xshape = x.get_shape()[1:]
+	
+	with tf.variable_scope(name, reuse=reuse):
+		gamma = tf.get_variable('gamma', xshape, initializer=tf.contrib.layers.xavier_initializer(), trainable=True)
+		beta  = tf.get_variable('beta', xshape, initializer=tf.zeros_initializer, trainable=True)
+		
+		cx = x - tf.reduce_mean(x, axis=0)							# centered input
+		apx_var = tf.reduce_mean(tf.multiply(cx, ap2(cx)), axis=0)	# apx variance
+		xdot = cx / ap2(tf.sqrt(apx_var))						# normalize input
+		# out = tf.multiply(gamma, xdot) + beta				# adapting distribution?
+	
+	return xdot
 
 
-# batch normalization can be added using tf.contrib.batch_norm
-# as described in http://arxiv.org/abs/1502.03167
-# or by using the following function
-# # Shift based Batch Normalizing Transform, applied to activation (x) over a mini-batch.
-def shift_batch_normalization(x, gamma, beta):
+# Spatial shift based batch normalization, like spatial batch normalization it keeps
+# the convolution property. Hence it applies the same transformation to each element
+# of the same feature map
+def spatial_shift_batch_norm(x, data_format='NHWC', reuse=False, name="spatial_batch_norm"):
+	assert data_format in ['NHWC', 'NCHW']
 	
-	cx = c - tf.mean(x, axis=1)								# centered input
-	apx_var = tf.mean(lr_binary_shift(cx, ap2(cx)), axis=1) # apx variance
-	xdot = lr_binary_shift(cx, ap2(tf.reciprocal(tf.sqrt(apx_var))))
-	out = lr_binary_shift(ap2(gamma), xdot)
-	return out
+	if data_format == "NHWC":
+		mean_axis = (0,1,2)
+		channel_axis = 3
+	elif data_format == "NCHW":
+		mean_axis = (0,2,3)
+		channel_axis = 1
 	
-	# return out
+	with tf.variable_scope(name, reuse=reuse):
+		gamma = tf.get_variable('gamma', x.get_shape()[channel_axis], initializer=tf.contrib.layers.xavier_initializer(), trainable=True)
+		beta  = tf.get_variable('beta', x.get_shape()[channel_axis], initializer=tf.zeros_initializer, trainable=True)
+		
+		cx = c - tf.reduce_mean(x, axis=mean_axis, keepdims=True)		# centered input
+		cx_sq = tf.multiply(cx, ap2(cx))
+		apx_var = tf.reduce_mean(cx_sq, axis=mean_axis, keepdims=True)	# apx variance
+		xdot = cx / ap2(tf.sqrt(apx_var))								# normalize input
+		#out = tf.multiply(ap2(gamma), ap2(xdot)) + beta					# adapting distribution?
+	
+	return xdot
+	
