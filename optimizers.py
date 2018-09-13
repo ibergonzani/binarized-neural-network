@@ -63,19 +63,14 @@ class ShiftBasedAdaMaxOptimizer(optimizer.Optimizer):
 		v_t = v.assign(beta1 * v + (1. - beta1) * grad)
 		m_t = m.assign(tf.maximum(beta2 * m + eps, tf.abs(grad)))
 		
-		# g_t = v_t / m_t
-		# var_update = state_ops.assign_sub(var, (lr / (1 - beta1_power)) * g_t)
-		
 		# here we apply the shift on the learning rate and on m moment. Since the shift operation
 		# is defined for integer values only, we compute them as the approximate power of two
 		# of the original operations (lr/(1-beta1^t)) and (v_t / m_t). With dedicated hardware
 		# these operations would have been done just by using shift ops.
-		lr_c = lr / (1 - beta1_power)
-		lr_c = ap2(lr_c)
+		lr_c = ap2(lr) / (1 - beta1_power)
 		g_t = v_t / ap2(m_t)
 		
 		var_update = state_ops.assign_sub(var, lr_c * g_t)
-		
 		return control_flow_ops.group(*[var_update, m_t, v_t])
 		
 		

@@ -21,7 +21,8 @@ def binary_multilayer_perceptron(input, units_list):
 	return input, output
 
 	
-def cifar10(input, training=True, momentum=0.9):
+def cifar10(input, training=True, momentum=0.99):
+	print(training, momentum)
 	out = tf.layers.conv2d(input, 128, [3,3], [1,1], padding='VALID', use_bias=False, name='c_conv2d_1')
 	out = tf.layers.batch_normalization(out, training=training, momentum=momentum)
 	out = tf.nn.relu(out)
@@ -50,12 +51,13 @@ def cifar10(input, training=True, momentum=0.9):
 	out = tf.layers.dense(out, 1024, use_bias=False, name='dense_2')
 	out = tf.layers.batch_normalization(out, training=training, momentum=momentum)
 	out = tf.nn.relu(out)
-	output = tf.layers.dense(out, 10, name='dense_3')
-	
+	out = tf.layers.dense(out, 10, name='dense_3')
+	output = tf.layers.batch_normalization(out, training=training, momentum=momentum)
 	return input, output
 
 	
-def binary_cifar10(input, training=True, momentum=0.9):
+def binary_cifar10(input, training=True, momentum=0.99):
+	print(training, momentum)
 	out = layers.binaryConv2d(input, 128, [3,3], [1,1], padding='VALID', use_bias=False, binarize_input=False, name='bc_conv2d_1')
 	out = tf.layers.batch_normalization(out, training=training, momentum=momentum)
 	out = tf.clip_by_value(out, -1, 1)
@@ -89,7 +91,8 @@ def binary_cifar10(input, training=True, momentum=0.9):
 	return input, output
 	
 
-def binary_cifar10_sbn(input, training=True, momentum=0.9):
+def binary_cifar10_sbn(input, training=True, momentum=0.99):
+	print(training, momentum)
 	out = layers.binaryConv2d(input, 128, [3,3], [1,1], padding='VALID', use_bias=False, binarize_input=False, name='bc_conv2d_1')
 	out = layers.spatial_shift_batch_norm(out, training=training, momentum=momentum, name='shift_batch_norm_1')
 	out = tf.clip_by_value(out, -1, 1)
@@ -124,7 +127,8 @@ def binary_cifar10_sbn(input, training=True, momentum=0.9):
 
 	
 
-def mnist(input, training=True, momentum=0.9):
+def mnist(input, training=True, momentum=0.99):
+	print(training, momentum)
 	out = tf.layers.dense(input, 2048, activation=None)
 	out = tf.layers.batch_normalization(out, training=training, momentum=momentum)
 	out = tf.nn.relu(out)
@@ -134,12 +138,14 @@ def mnist(input, training=True, momentum=0.9):
 	out = tf.layers.dense(out, 2048, activation=None)
 	out = tf.layers.batch_normalization(out, training=training, momentum=momentum)
 	out = tf.nn.relu(out)
-	output = tf.layers.dense(out, 10, activation=None)
+	out = tf.layers.dense(out, 10, activation=None)
+	output = tf.layers.batch_normalization(out, training=training, momentum=momentum)
 	
 	return input, output
 	
 
-def binary_mnist(input, training=True, momentum=0.9):
+def binary_mnist(input, training=True, momentum=0.99):
+	print(training, momentum)
 	fc1 = layers.binaryDense(input, 2048, activation=None, name="binarydense1", binarize_input=False)
 	bn1 = tf.layers.batch_normalization(fc1, training=training, momentum=momentum)
 	ac1 = tf.clip_by_value(bn1, -1, 1)
@@ -155,7 +161,8 @@ def binary_mnist(input, training=True, momentum=0.9):
 	return input, output
 	
 	
-def binary_mnist_sbn(input, training=True, momentum=0.9):
+def binary_mnist_sbn(input, training=True, momentum=0.99):
+	print(training, momentum)
 	fc1 = layers.binaryDense(input, 2048, activation=None, name="binarydense1", binarize_input=False)
 	bn1 = layers.shift_batch_norm(fc1, training=training, momentum=momentum, name="batch_norm1")
 	ac1 = tf.clip_by_value(bn1, -1, 1)
@@ -171,9 +178,6 @@ def binary_mnist_sbn(input, training=True, momentum=0.9):
 	return input, output
 	
 	
-def netlist():
-	return ['mlp', 'binary_mlp', 'cifar10', 'binary_cifar10', 'mnist', 'binary_mnist']
-
 
 def get_network(type, dataset, *args, **kargs):
 
@@ -187,7 +191,7 @@ def get_network(type, dataset, *args, **kargs):
 	
 	if dataset == 'cifar10':
 		if type == 'standard':
-			return cifar100(*args, **kargs)
+			return cifar10(*args, **kargs)
 		if type == 'binary':
 			return binary_cifar10(*args, **kargs)
 		if type == 'binary_sbn':

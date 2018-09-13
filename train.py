@@ -57,10 +57,10 @@ batch_size = tf.placeholder(tf.int64)
 data_features, data_labels = tf.placeholder(tf.float32, (None,)+x_train.shape[1:]), tf.placeholder(tf.int32, (None,)+y_train.shape[1:])
 
 train_data = tf.data.Dataset.from_tensor_slices((data_features, data_labels))
-train_data = train_data.batch(batch_size).repeat().shuffle(x_train.shape[0])
+train_data = train_data.repeat().shuffle(x_train.shape[0]).batch(batch_size)
 
 test_data = tf.data.Dataset.from_tensor_slices((data_features, data_labels))
-test_data = test_data.batch(batch_size).repeat().shuffle(x_train.shape[0])
+test_data = test_data.repeat().shuffle(x_test.shape[0]).batch(batch_size)
 
 data_iterator = tf.data.Iterator.from_structure(train_data.output_types, train_data.output_shapes)
 
@@ -87,8 +87,10 @@ with tf.name_scope('trainer_optimizer'):
 	loss = tf.square(tf.losses.hinge_loss(tf.one_hot(labels, num_classes), ysoft))
 	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=ynet, labels=labels)
 	
-	global_step = tf.train.get_or_create_global_step()
-	train_op = optimizer.minimize(loss=cross_entropy, global_step=global_step)
+	update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+	with tf.control_dependencies(update_ops):
+		global_step = tf.train.get_or_create_global_step()
+		train_op = optimizer.minimize(loss=cross_entropy, global_step=global_step)
 
 	
 # metrics definition

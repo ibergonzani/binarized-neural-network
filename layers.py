@@ -134,7 +134,7 @@ def shift_batch_norm(x, training=True, momentum=0.95, epsilon=1e-8, reuse=False,
 			
 			# updating ops. for moving average and moving variance used at inference time
 			avg_update = tf.assign(mov_avg, momentum * mov_avg + (1.0 - momentum) * avg)
-			var_update = tf.assign(mov_var, momentum * mov_avg + (1.0 - momentum) * var)
+			var_update = tf.assign(mov_var, momentum * mov_var + (1.0 - momentum) * var)
 			
 			with tf.control_dependencies([avg_update, var_update]):
 				return cx / ap2(tf.sqrt(var + epsilon))				# normalized input
@@ -157,18 +157,18 @@ def spatial_shift_batch_norm(x, data_format='NHWC', training=True, momentum=0.95
 	if data_format == "NHWC":
 		mean_axis = (0,1,2)
 		channel_axis = 3
-		out_channels = [1, 1, 1, x.get_shape().as_list()[channel_axis]]
+		ch_tensor_shape = [1, 1, 1, x.get_shape().as_list()[channel_axis]]
 	elif data_format == "NCHW":
 		mean_axis = (0,2,3)
 		channel_axis = 1
-		out_channels = [1, x.get_shape().as_list()[channel_axis], 1, 1]
+		ch_tensor_shape = [1, x.get_shape().as_list()[channel_axis], 1, 1]
 	
 	with tf.variable_scope(name, reuse=reuse):
-		gamma = tf.get_variable('gamma', out_channels, initializer=tf.ones_initializer, trainable=True)
-		beta  = tf.get_variable('beta', out_channels, initializer=tf.zeros_initializer, trainable=True)
+		gamma = tf.get_variable('gamma', ch_tensor_shape, initializer=tf.ones_initializer, trainable=True)
+		beta  = tf.get_variable('beta', ch_tensor_shape, initializer=tf.zeros_initializer, trainable=True)
 		
-		mov_avg = tf.get_variable('mov_avg', out_channels, initializer=tf.zeros_initializer, trainable=False)
-		mov_var = tf.get_variable('mov_std', out_channels, initializer=tf.ones_initializer, trainable=False)
+		mov_avg = tf.get_variable('mov_avg', ch_tensor_shape, initializer=tf.zeros_initializer, trainable=False)
+		mov_var = tf.get_variable('mov_std', ch_tensor_shape, initializer=tf.ones_initializer, trainable=False)
 		
 		def training_xdot():
 			avg = tf.reduce_mean(x, axis=mean_axis, keepdims=True)
@@ -177,7 +177,7 @@ def spatial_shift_batch_norm(x, data_format='NHWC', training=True, momentum=0.95
 			
 			# updating ops. for moving average and moving variance used at inference time
 			avg_update = tf.assign(mov_avg, momentum * mov_avg + (1.0 - momentum) * avg)
-			var_update = tf.assign(mov_var, momentum * mov_avg + (1.0 - momentum) * var)
+			var_update = tf.assign(mov_var, momentum * mov_var + (1.0 - momentum) * var)
 			
 			with tf.control_dependencies([avg_update, var_update]):
 				return cx / ap2(tf.sqrt(var + epsilon))					# normalized input
