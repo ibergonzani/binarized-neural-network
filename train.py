@@ -43,10 +43,10 @@ if not os.path.exists(test_logdir):
 
 	
 # dataset preparation using tensorflow dataset iterators
-x_train, y_train, x_test, y_test = datasets.load_mnist() #random_dataset()
+x_train, y_train, x_test, y_test, num_classes = datasets.load_mnist() #random_dataset()
 
 batch_size = tf.placeholder(tf.int64)
-data_features, data_labels = tf.placeholder(tf.float32, (None,)+x_train.shape[1:]), tf.placeholder(tf.float32, (None,)+y_train.shape[1:])
+data_features, data_labels = tf.placeholder(tf.float32, (None,)+x_train.shape[1:]), tf.placeholder(tf.int32, (None,)+y_train.shape[1:])
 
 train_data = tf.data.Dataset.from_tensor_slices((data_features, data_labels))
 train_data = train_data.batch(batch_size).repeat().shuffle(x_train.shape[0])
@@ -60,16 +60,15 @@ features, labels = data_iterator.get_next()
 train_initialization = data_iterator.make_initializer(train_data)
 test_initialization = data_iterator.make_initializer(test_data)
 
-
 # network initialization
 # xnet, ynet = networks.binary_multilayer_perceptron(features, [2048, 2048, 2048, 10])
-xnet, ynet = networks.binary_mnist_sbn(features)
+xnet, ynet = networks.mnist(features)
 ysoft = tf.nn.softmax(ynet)
 
 with tf.name_scope('trainer_optimizer'):
 	optimizer = optimizers.ShiftBasedAdaMaxOptimizer(learning_rate=1e-3)
-	loss = tf.losses.mean_squared_error(labels, ysoft)
-	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=ynet, labels=tf.argmax(labels, axis=1))
+	loss = tf.losses.mean_squared_error(tf.one_hot(labels, num_classes), ysoft)
+	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=ynet, labels=labels)
 	
 	global_step = tf.train.get_or_create_global_step()
 	train_op = optimizer.minimize(loss=cross_entropy, global_step=global_step)
@@ -77,7 +76,7 @@ with tf.name_scope('trainer_optimizer'):
 # metrics definition
 with tf.variable_scope('metrics'):
 	mloss, mloss_update	  = tf.metrics.mean(loss)
-	accuracy, acc_update  = tf.metrics.accuracy(tf.argmax(labels, axis=1), tf.argmax(ysoft, axis=1))
+	accuracy, acc_update  = tf.metrics.accuracy(labels, tf.argmax(ysoft, axis=1))
 
 	metrics = [mloss, accuracy]
 	metrics_update = [mloss_update, acc_update]

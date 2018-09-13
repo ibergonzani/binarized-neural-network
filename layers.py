@@ -45,7 +45,7 @@ def binaryDense(inputs, units, activation=None, use_bias=True, trainable=True, b
 
 
 
-def binaryConv2d(inputs, filters, kernel_size, strides, padding="VALID", bias=True, activation=None, binarize_input=True, trainable=True, 
+def binaryConv2d(inputs, filters, kernel_size, strides, padding="VALID", use_bias=True, activation=None, binarize_input=True, trainable=True, 
 					reuse=False, use_cudnn_on_gpu=True, data_format='NHWC', dilations=[1,1,1,1], name='binaryconv2d'):
 	
 	assert len(strides) == 2
@@ -53,18 +53,18 @@ def binaryConv2d(inputs, filters, kernel_size, strides, padding="VALID", bias=Tr
 	
 	if data_format == 'NHWC':
 		strides = [1] + strides + [1]
-		in_ch = input.get_shape().as_list()[3]
-		wshape = [in_ch] + kernel_size + [filters]
+		in_ch = inputs.get_shape().as_list()[3]
+		wshape = kernel_size + [in_ch, filters]
 	elif data_format == 'NCHW':
 		strides = [1, 1] + strides
-		in_ch = input.get_shape().as_list()[1]	
+		in_ch = inputs.get_shape().as_list()[1]	
 		wshape = [in_ch, filters] + kernel_size
 	
 	
 	with tf.variable_scope(name, reuse=reuse):
 		# getting filter weights and add clip operation on them (between -1, 1)			
-		fw = tf.get_variable('weight', wshape, trainable=trainable, initializer=tf.contrib.layers.conv2d_initializer())
-		fw = tf.clip_by_value(w, -1, 1)
+		fw = tf.get_variable('weight', wshape, trainable=trainable, initializer=tf.contrib.layers.xavier_initializer())
+		fw = tf.clip_by_value(fw, -1, 1)
 		
 		# binarize  input and weights of the layer
 		if binarize_input:
@@ -76,7 +76,7 @@ def binaryConv2d(inputs, filters, kernel_size, strides, padding="VALID", bias=Tr
 							data_format=data_format, dilations=dilations)
 		
 		# adding bias
-		if bias:
+		if use_bias:
 			fb = tf.get_variable('bias', [filters], initializer=tf.zeros_initializer, trainable=trainable)
 			out = tf.nn.bias_add(out, fb, data_format=data_format)
 		
@@ -86,6 +86,7 @@ def binaryConv2d(inputs, filters, kernel_size, strides, padding="VALID", bias=Tr
 		
 		# activation collection is not automatically populated
 		tf.add_to_collection(tf.GraphKeys.ACTIVATIONS, out)
+		
 		return out
 
 
@@ -120,15 +121,15 @@ def shift_batch_norm(x, reuse=False, name="batch_norm"):
 	xshape = x.get_shape()[1:]
 	
 	with tf.variable_scope(name, reuse=reuse):
-		gamma = tf.get_variable('gamma', xshape, initializer=tf.contrib.layers.xavier_initializer(), trainable=True)
+		gamma = tf.get_variable('gamma', xshape, initializer=tf.ones_initializer, trainable=True)
 		beta  = tf.get_variable('beta', xshape, initializer=tf.zeros_initializer, trainable=True)
 		
 		cx = x - tf.reduce_mean(x, axis=0)							# centered input
 		apx_var = tf.reduce_mean(tf.multiply(cx, ap2(cx)), axis=0)	# apx variance
-		xdot = cx / ap2(tf.sqrt(apx_var))						# normalize input
-		# out = tf.multiply(gamma, xdot) + beta				# adapting distribution?
+		xdot = cx / ap2(tf.sqrt(apx_var))							# normalized input
+		out = tf.multiply(ap2(gamma), xdot) + beta					# adapting distribution?
 	
-	return xdot
+	return out
 
 
 # Spatial shift based batch normalization, like spatial batch normalization it keeps
@@ -136,7 +137,7 @@ def shift_batch_norm(x, reuse=False, name="batch_norm"):
 # of the same feature map
 def spatial_shift_batch_norm(x, data_format='NHWC', reuse=False, name="spatial_batch_norm"):
 	assert data_format in ['NHWC', 'NCHW']
-	
+	print(x.get_shape().as_list())
 	if data_format == "NHWC":
 		mean_axis = (0,1,2)
 		channel_axis = 3
@@ -145,14 +146,14 @@ def spatial_shift_batch_norm(x, data_format='NHWC', reuse=False, name="spatial_b
 		channel_axis = 1
 	
 	with tf.variable_scope(name, reuse=reuse):
-		gamma = tf.get_variable('gamma', x.get_shape()[channel_axis], initializer=tf.contrib.layers.xavier_initializer(), trainable=True)
-		beta  = tf.get_variable('beta', x.get_shape()[channel_axis], initializer=tf.zeros_initializer, trainable=True)
+		gamma = tf.get_variable('gamma', x.get_shape().as_list()[channel_axis], initializer=tf.ones_initializer, trainable=True)
+		beta  = tf.get_variable('beta', x.get_shape().as_list()[channel_axis], initializer=tf.zeros_initializer, trainable=True)
 		
-		cx = c - tf.reduce_mean(x, axis=mean_axis, keepdims=True)		# centered input
+		cx = x - tf.reduce_mean(x, axis=mean_axis, keepdims=True)		# centered input
 		cx_sq = tf.multiply(cx, ap2(cx))
 		apx_var = tf.reduce_mean(cx_sq, axis=mean_axis, keepdims=True)	# apx variance
-		xdot = cx / ap2(tf.sqrt(apx_var))								# normalize input
-		#out = tf.multiply(ap2(gamma), ap2(xdot)) + beta					# adapting distribution?
+		xdot = cx / ap2(tf.sqrt(apx_var))								# normalized input
+		out = tf.multiply(ap2(gamma), xdot) + beta						# adapting distribution?
 	
-	return xdot
+	return out
 	
