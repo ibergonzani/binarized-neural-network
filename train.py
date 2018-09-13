@@ -13,12 +13,12 @@ import optimizers
 
 
 parser = argparse.ArgumentParser(description='Training module for binarized nets')
-parser.add_argument('--network', dest='network', type=str, choices=networks.netlist(), help='Type of network to be used')
-parser.add_argument('--modeldir', dest='modeldir', type=str, default='./models/', help='path where to save network\'s weights')
-parser.add_argument('--logdir', dest='logdir', type=str, default='./logs/', help='folder for tensorboard logs')
-parser.add_argument('--epochs', dest='epochs', type=int, default=10, help='Number of epochs performed during training')
-parser.add_argument('--batchsize', dest='batchsize', type=int, default=32, help='Dimension of the training batch')
-parser.add_argument('--stepsize', dest='stepsize', type=float, default=1e-3, help='Starting optimizer learning rate value')
+parser.add_argument('--network', type=str, choices=networks.netlist(), help='Type of network to be used')
+parser.add_argument('--modeldir', type=str, default='./models/', help='path where to save network\'s weights')
+parser.add_argument('--logdir', type=str, default='./logs/', help='folder for tensorboard logs')
+parser.add_argument('--epochs', type=int, default=10, help='Number of epochs performed during training')
+parser.add_argument('--batchsize', type=int, default=32, help='Dimension of the training batch')
+parser.add_argument('--stepsize', type=float, default=1e-3, help='Starting optimizer learning rate value')
 args = parser.parse_args()
 
 MODELDIR = args.modeldir
@@ -62,8 +62,10 @@ train_initialization = data_iterator.make_initializer(train_data)
 test_initialization = data_iterator.make_initializer(test_data)
 
 # network initialization
-# xnet, ynet = networks.binary_multilayer_perceptron(features, [2048, 2048, 2048, 10])
-xnet, ynet = networks.mnist(features)
+is_training = tf.get_variable('is_training', initializer=tf.constant(False, tf.bool))
+switch_training_inference = tf.assign(is_training, tf.logical_not(is_training))
+
+xnet, ynet = networks.binary_mnist_sbn(features, training=is_training)
 ysoft = tf.nn.softmax(ynet)
 
 with tf.name_scope('trainer_optimizer'):
@@ -120,9 +122,10 @@ with tf.Session() as sess:
 		if (epoch + 1) % 10 == 0:
 			sess.run(update_learning_rate, feed_dict={learning_rate_decay: 2.0})
 		
-		# initialize training dataset
+		# initialize training dataset and set batch normalization training
 		sess.run(train_initialization, feed_dict={data_features:x_train, data_labels:y_train, batch_size:BATCH_SIZE})
 		sess.run(metrics_initializer)
+		sess.run(switch_training_inference)
 		
 		progress_info = ProgressBar(total=NUM_BATCHES_TRAIN, prefix=' train', show=True)
 		
@@ -140,9 +143,10 @@ with tf.Session() as sess:
 		
 		
 		
-		# initialize the test dataset
+		# initialize the test dataset and set batc normalization inference
 		sess.run(test_initialization, feed_dict={data_features:x_test, data_labels:y_test, batch_size:BATCH_SIZE})
 		sess.run(metrics_initializer)
+		sess.run(switch_training_inference)
 		
 		progress_info = ProgressBar(total=NUM_BATCHES_TEST, prefix='  eval', show=True)
 		

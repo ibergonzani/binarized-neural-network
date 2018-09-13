@@ -139,34 +139,34 @@ def mnist(input, training=True):
 	return input, output
 	
 
-def binary_mnist(input):
+def binary_mnist(input, training=True):
 	fc1 = layers.binaryDense(input, 2048, activation=None, name="binarydense1", binarize_input=False)
-	bn1 = tf.contrib.layers.batch_norm(fc1)
+	bn1 = tf.layers.batch_normalization(fc1, training=training)
 	ac1 = tf.clip_by_value(bn1, -1, 1)
 	fc2 = layers.binaryDense(ac1, 2048, activation=None, name="binarydense2")
-	bn2 = tf.contrib.layers.batch_norm(fc2)
+	bn2 = tf.layers.batch_normalization(fc2, training=training)
 	ac2 = tf.clip_by_value(bn2, -1, 1)
 	fc3 = layers.binaryDense(ac2, 2048, activation=None, name="binarydense3")
-	bn3 = tf.contrib.layers.batch_norm(fc3)
+	bn3 = tf.layers.batch_normalization(fc3, training=training)
 	ac3 = tf.clip_by_value(bn3, -1, 1)
 	fc4 = layers.binaryDense(ac3, 10, activation=None, name="binarydense4")
-	output = tf.contrib.layers.batch_norm(fc4)
+	output =  tf.layers.batch_normalization(fc4, training=training)
 	
 	return input, output
 	
 	
-def binary_mnist_sbn(input):
+def binary_mnist_sbn(input, training=True):
 	fc1 = layers.binaryDense(input, 2048, activation=None, name="binarydense1", binarize_input=False)
-	bn1 = layers.shift_batch_norm(fc1, name="batch_norm1")
+	bn1 = layers.shift_batch_norm(fc1, training=training, name="batch_norm1")
 	ac1 = tf.clip_by_value(bn1, -1, 1)
 	fc2 = layers.binaryDense(ac1, 2048, activation=None, name="binarydense2")
-	bn2 = layers.shift_batch_norm(fc2, name="batch_norm2")
+	bn2 = layers.shift_batch_norm(fc2, training=training, name="batch_norm2")
 	ac2 = tf.clip_by_value(bn2, -1, 1)
 	fc3 = layers.binaryDense(ac2, 2048, activation=None, name="binarydense3")
-	bn3 = layers.shift_batch_norm(fc3, name="batch_norm3")
+	bn3 = layers.shift_batch_norm(fc3, training=training, name="batch_norm3")
 	ac3 = tf.clip_by_value(bn3, -1, 1)
 	fc4 = layers.binaryDense(ac3, 10, activation=None, name="binarydense4")
-	output = layers.shift_batch_norm(fc4, name="batch_norm4")
+	output = layers.shift_batch_norm(fc4, training=training, name="batch_norm4")
 	
 	return input, output
 	
