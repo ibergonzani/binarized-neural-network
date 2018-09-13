@@ -18,13 +18,14 @@ parser.add_argument('--modeldir', dest='modeldir', type=str, default='./models/'
 parser.add_argument('--logdir', dest='logdir', type=str, default='./logs/', help='folder for tensorboard logs')
 parser.add_argument('--epochs', dest='epochs', type=int, default=10, help='Number of epochs performed during training')
 parser.add_argument('--batchsize', dest='batchsize', type=int, default=32, help='Dimension of the training batch')
+parser.add_argument('--stepsize', dest='stepsize', type=float, default=1e-3, help='Starting optimizer learning rate value')
 args = parser.parse_args()
 
 MODELDIR = args.modeldir
 LOGDIR = args.logdir
 EPOCHS = args.epochs
 BATCH_SIZE = args.batchsize
-
+STEPSIZE = args.stepsize
 
 
 timestamp = int(time.time())
@@ -66,8 +67,12 @@ xnet, ynet = networks.mnist(features)
 ysoft = tf.nn.softmax(ynet)
 
 with tf.name_scope('trainer_optimizer'):
-	optimizer = optimizers.ShiftBasedAdaMaxOptimizer(learning_rate=1e-3)
-	loss = tf.losses.mean_squared_error(tf.one_hot(labels, num_classes), ysoft)
+	learning_rate = tf.Variable(STEPSIZE, name='learning_rate')
+	learning_rate_decay = tf.placeholder(tf.float32, shape=(), name='lr_decay')
+	update_learning_rate = tf.assign(learning_rate, learning_rate / learning_rate_decay)
+	
+	optimizer = optimizers.ShiftBasedAdaMaxOptimizer(learning_rate=learning_rate)
+	loss = tf.square(tf.losses.hinge_loss(tf.one_hot(labels, num_classes), ysoft))
 	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=ynet, labels=labels)
 	
 	global_step = tf.train.get_or_create_global_step()
@@ -111,6 +116,9 @@ with tf.Session() as sess:
 		
 		print("\nEPOCH %d/%d" % (epoch+1, EPOCHS))
 		
+		# exponential learning rate decay
+		if (epoch + 1) % 10 == 0:
+			sess.run(update_learning_rate, feed_dict={learning_rate_decay: 2.0})
 		
 		# initialize training dataset
 		sess.run(train_initialization, feed_dict={data_features:x_train, data_labels:y_train, batch_size:BATCH_SIZE})
