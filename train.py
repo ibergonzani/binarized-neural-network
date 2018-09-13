@@ -13,7 +13,8 @@ import optimizers
 
 
 parser = argparse.ArgumentParser(description='Training module for binarized nets')
-parser.add_argument('--network', type=str, choices=networks.netlist(), help='Type of network to be used')
+parser.add_argument('--network', type=str, default='standard', choices=['standard','binary','binary_sbn'], help='Type of network to be used')
+parser.add_argument('--dataset', type=str, default='mnist', choices=['mnist','cifar10'], help='Dataset to be used for the learning task')
 parser.add_argument('--modeldir', type=str, default='./models/', help='path where to save network\'s weights')
 parser.add_argument('--logdir', type=str, default='./logs/', help='folder for tensorboard logs')
 parser.add_argument('--epochs', type=int, default=10, help='Number of epochs performed during training')
@@ -21,6 +22,8 @@ parser.add_argument('--batchsize', type=int, default=32, help='Dimension of the 
 parser.add_argument('--stepsize', type=float, default=1e-3, help='Starting optimizer learning rate value')
 args = parser.parse_args()
 
+NETWORK = args.network
+DATASET = args.dataset
 MODELDIR = args.modeldir
 LOGDIR = args.logdir
 EPOCHS = args.epochs
@@ -44,7 +47,7 @@ if not os.path.exists(test_logdir):
 
 	
 # dataset preparation using tensorflow dataset iterators
-x_train, y_train, x_test, y_test, num_classes = datasets.load_mnist() #random_dataset()
+x_train, y_train, x_test, y_test, num_classes = datasets.load_dataset(DATASET)
 
 batch_size = tf.placeholder(tf.int64)
 data_features, data_labels = tf.placeholder(tf.float32, (None,)+x_train.shape[1:]), tf.placeholder(tf.int32, (None,)+y_train.shape[1:])
@@ -61,11 +64,12 @@ features, labels = data_iterator.get_next()
 train_initialization = data_iterator.make_initializer(train_data)
 test_initialization = data_iterator.make_initializer(test_data)
 
+
 # network initialization
 is_training = tf.get_variable('is_training', initializer=tf.constant(False, tf.bool))
 switch_training_inference = tf.assign(is_training, tf.logical_not(is_training))
 
-xnet, ynet = networks.binary_mnist_sbn(features, training=is_training)
+xnet, ynet = networks.get_network(NETWORK, DATASET, features, training=is_training)
 ysoft = tf.nn.softmax(ynet)
 
 with tf.name_scope('trainer_optimizer'):
@@ -80,6 +84,7 @@ with tf.name_scope('trainer_optimizer'):
 	global_step = tf.train.get_or_create_global_step()
 	train_op = optimizer.minimize(loss=cross_entropy, global_step=global_step)
 
+	
 # metrics definition
 with tf.variable_scope('metrics'):
 	mloss, mloss_update	  = tf.metrics.mean(loss)
@@ -102,7 +107,6 @@ merged_summary = tf.summary.merge([los_sum, acc_sum])
 # network weights saver
 saver = tf.train.Saver()
 
-
 NUM_BATCHES_TRAIN = math.ceil(x_train.shape[0] / BATCH_SIZE)
 NUM_BATCHES_TEST = math.ceil(x_test.shape[0] / BATCH_SIZE)
 
@@ -121,6 +125,7 @@ with tf.Session() as sess:
 		# exponential learning rate decay
 		if (epoch + 1) % 10 == 0:
 			sess.run(update_learning_rate, feed_dict={learning_rate_decay: 2.0})
+		
 		
 		# initialize training dataset and set batch normalization training
 		sess.run(train_initialization, feed_dict={data_features:x_train, data_labels:y_train, batch_size:BATCH_SIZE})

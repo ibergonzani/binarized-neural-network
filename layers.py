@@ -116,7 +116,7 @@ def ap2(x):
  
 # Shift based Batch Normalizing Transform, applied to activation (x) over a mini-batch,
 #as described in http://arxiv.org/abs/1502.03167
-def shift_batch_norm(x, reuse=False, training=True, epsilon=1e-8, name="batch_norm"):
+def shift_batch_norm(x, training=True, momentum=0.95, epsilon=1e-8, reuse=False, name="batch_norm"):
 	
 	xshape = x.get_shape()[1:]
 	
@@ -125,7 +125,7 @@ def shift_batch_norm(x, reuse=False, training=True, epsilon=1e-8, name="batch_no
 		beta  = tf.get_variable('beta', xshape, initializer=tf.zeros_initializer, trainable=True)
 		
 		mov_avg = tf.get_variable('mov_avg', xshape, initializer=tf.zeros_initializer, trainable=False)
-		mov_var = tf.get_variable('mov_std', xshape, initializer=tf.zeros_initializer, trainable=False)
+		mov_var = tf.get_variable('mov_std', xshape, initializer=tf.ones_initializer, trainable=False)
 		
 		def training_xdot():
 			avg = tf.reduce_mean(x, axis=0)							# feature means
@@ -133,8 +133,8 @@ def shift_batch_norm(x, reuse=False, training=True, epsilon=1e-8, name="batch_no
 			var = tf.reduce_mean(tf.multiply(cx, ap2(cx)), axis=0)	# apx variance
 			
 			# updating ops. for moving average and moving variance used at inference time
-			avg_update = tf.assign(mov_avg, 0.9 * mov_avg + 0.1 * avg)
-			var_update = tf.assign(mov_var, 0.9 * mov_avg + 0.1 * var)
+			avg_update = tf.assign(mov_avg, momentum * mov_avg + (1.0 - momentum) * avg)
+			var_update = tf.assign(mov_var, momentum * mov_avg + (1.0 - momentum) * var)
 			
 			with tf.control_dependencies([avg_update, var_update]):
 				return cx / ap2(tf.sqrt(var + epsilon))				# normalized input
@@ -151,22 +151,24 @@ def shift_batch_norm(x, reuse=False, training=True, epsilon=1e-8, name="batch_no
 # Spatial shift based batch normalization, like spatial batch normalization it keeps
 # the convolution property. Hence it applies the same transformation to each element
 # of the same feature map
-def spatial_shift_batch_norm(x, data_format='NHWC', training=True, epsilon=1e-8, reuse=False, name="spatial_batch_norm"):
+def spatial_shift_batch_norm(x, data_format='NHWC', training=True, momentum=0.95, epsilon=1e-8, reuse=False, name="spatial_batch_norm"):
 	assert data_format in ['NHWC', 'NCHW']
-	print(x.get_shape().as_list())
+	
 	if data_format == "NHWC":
 		mean_axis = (0,1,2)
 		channel_axis = 3
+		out_channels = [1, 1, 1, x.get_shape().as_list()[channel_axis]]
 	elif data_format == "NCHW":
 		mean_axis = (0,2,3)
 		channel_axis = 1
+		out_channels = [1, x.get_shape().as_list()[channel_axis], 1, 1]
 	
 	with tf.variable_scope(name, reuse=reuse):
-		gamma = tf.get_variable('gamma', x.get_shape().as_list()[channel_axis], initializer=tf.ones_initializer, trainable=True)
-		beta  = tf.get_variable('beta', x.get_shape().as_list()[channel_axis], initializer=tf.zeros_initializer, trainable=True)
+		gamma = tf.get_variable('gamma', out_channels, initializer=tf.ones_initializer, trainable=True)
+		beta  = tf.get_variable('beta', out_channels, initializer=tf.zeros_initializer, trainable=True)
 		
-		mov_avg = tf.get_variable('mov_avg', xshape, initializer=tf.zeros_initializer, trainable=False)
-		mov_var = tf.get_variable('mov_std', xshape, initializer=tf.zeros_initializer, trainable=False)
+		mov_avg = tf.get_variable('mov_avg', out_channels, initializer=tf.zeros_initializer, trainable=False)
+		mov_var = tf.get_variable('mov_std', out_channels, initializer=tf.ones_initializer, trainable=False)
 		
 		def training_xdot():
 			avg = tf.reduce_mean(x, axis=mean_axis, keepdims=True)
@@ -174,8 +176,8 @@ def spatial_shift_batch_norm(x, data_format='NHWC', training=True, epsilon=1e-8,
 			var = tf.reduce_mean(tf.multiply(cx, ap2(cx)), axis=mean_axis, keepdims=True)	# apx variance
 			
 			# updating ops. for moving average and moving variance used at inference time
-			avg_update = tf.assign(mov_avg, 0.9 * mov_avg + 0.1 * avg)
-			var_update = tf.assign(mov_var, 0.9 * mov_avg + 0.1 * var)
+			avg_update = tf.assign(mov_avg, momentum * mov_avg + (1.0 - momentum) * avg)
+			var_update = tf.assign(mov_var, momentum * mov_avg + (1.0 - momentum) * var)
 			
 			with tf.control_dependencies([avg_update, var_update]):
 				return cx / ap2(tf.sqrt(var + epsilon))					# normalized input
