@@ -20,6 +20,7 @@ parser.add_argument('--logdir', type=str, default='./logs/', help='folder for te
 parser.add_argument('--epochs', type=int, default=10, help='Number of epochs performed during training')
 parser.add_argument('--batchsize', type=int, default=32, help='Dimension of the training batch')
 parser.add_argument('--stepsize', type=float, default=1e-3, help='Starting optimizer learning rate value')
+parser.add_argument('--shift_optimizer', default=False, action='store_true', help='Toggle th use of shift based AdaMax instead of vanilla Adam optimizer')
 args = parser.parse_args()
 
 NETWORK = args.network
@@ -29,6 +30,7 @@ LOGDIR = args.logdir
 EPOCHS = args.epochs
 BATCH_SIZE = args.batchsize
 STEPSIZE = args.stepsize
+SHIFT_OPT = args.shift_optimizer
 
 
 timestamp = int(time.time())
@@ -79,7 +81,9 @@ with tf.name_scope('trainer_optimizer'):
 	learning_rate_decay = tf.placeholder(tf.float32, shape=(), name='lr_decay')
 	update_learning_rate = tf.assign(learning_rate, learning_rate / learning_rate_decay)
 	
-	optimizer = optimizers.ShiftBasedAdaMaxOptimizer(learning_rate=learning_rate)
+	opt_constructor = optimizers.ShiftBasedAdaMaxOptimizer if SHIFT_OPT else tf.train.AdamOptimizer
+	print(opt_constructor)
+	optimizer = opt_constructor(learning_rate=learning_rate)
 	loss = tf.square(tf.losses.hinge_loss(tf.one_hot(labels, num_classes), ysoft))
 	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=ynet, labels=labels)
 	
