@@ -33,12 +33,14 @@ STEPSIZE = args.stepsize
 
 timestamp = int(time.time())
 
-session_logdir = os.path.join(LOGDIR, str(timestamp))
+model_name = ''.join([str(timestamp), '_', NETWORK, '_', DATASET])
+session_logdir = os.path.join(LOGDIR, model_name)
 train_logdir = os.path.join(session_logdir, 'train')
-test_logdir = os.path.join(LOGDIR, str(timestamp), 'test')
+test_logdir = os.path.join(session_logdir, 'test')
+session_modeldir = os.path.join(MODELDIR, model_name)
 
-if not os.path.exists(MODELDIR):
-	os.mkdir(MODELDIR)
+if not os.path.exists(session_modeldir):
+	os.makedirs(session_modeldir)
 if not os.path.exists(train_logdir):
 	os.makedirs(train_logdir)
 if not os.path.exists(test_logdir):
@@ -169,7 +171,7 @@ with tf.Session() as sess:
 	
 	train_writer.close()
 	test_writer.close()
+	
+	saver.save(sess, os.path.join(session_modeldir, 'model.ckpt'))
 
-	saver.save(sess, MODELDIR+"/model.ckpt")
-
-print('\nTraining completed!\nNetwork model is saved in  {}\nTraining logs are saved in {}'.format(MODELDIR, session_logdir))
+print('\nTraining completed!\nNetwork model is saved in  {}\nTraining logs are saved in {}'.format(session_modeldir, session_logdir))
