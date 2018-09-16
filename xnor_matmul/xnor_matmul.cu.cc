@@ -233,19 +233,19 @@ void XnorMatmulFunctor<GPUDevice, T, mask_t>::operator()(const GPUDevice& d, T* 
 	int block_count = (m * n) / mask_size;
 	concantenateRowsSignsShared<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac);
 	
-	block_count = (m * n) / (thread_per_block * mask_size) + 1;
-	concantenateRowsSigns<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac, (m*n)/mask_size);
+	//block_count = (m * n) / (thread_per_block * mask_size) + 1;
+	//concantenateRowsSigns<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (a_mtx, ac, (m*n)/mask_size);
 	
 	block_count = (n * k) / (thread_per_block * mask_size) + 1;
 	concantenateColumnsSigns<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (b_mtx, bc, n, k, (n*k)/mask_size);
 	
-	block_count = (n * k) / mask_size;
-	concantenateColumnsSignsShared<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (b_mtx, bc, n, k);
+	//block_count = (n * k) / mask_size;
+	//concantenateColumnsSignsShared<T, mask_t> <<<block_count, thread_per_block, 0, d.stream()>>> (b_mtx, bc, n, k);
 	
 	
 	dim3 block_dims(k/BLOCK_SIZE, m/BLOCK_SIZE);
 	dim3 thread_dims(BLOCK_SIZE, BLOCK_SIZE);
-	matmulCudaKernelGlobal<T, mask_t><<<block_dims, thread_dims, 0, d.stream()>>>(ac, bc, out, m, n, k);
+	// matmulCudaKernelGlobal<T, mask_t><<<block_dims, thread_dims, 0, d.stream()>>>(ac, bc, out, m, n, k);
 	matmulCudaKernelShared<T, mask_t><<<block_dims, thread_dims, 0, d.stream()>>>(ac, bc, out, m, n, k);
 
 }

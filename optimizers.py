@@ -67,7 +67,7 @@ class ShiftBasedAdaMaxOptimizer(optimizer.Optimizer):
 		# is defined for integer values only, we compute them as the approximate power of two
 		# of the original operations (lr/(1-beta1^t)) and (v_t / m_t). With dedicated hardware
 		# these operations would have been done just by using shift ops.
-		lr_c = ap2(lr) / (1 - beta1_power)
+		lr_c = ap2(lr / (1 - beta1_power))
 		g_t = v_t / ap2(m_t)
 		
 		var_update = state_ops.assign_sub(var, lr_c * g_t)

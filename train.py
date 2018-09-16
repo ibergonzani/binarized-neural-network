@@ -74,7 +74,6 @@ is_training = tf.get_variable('is_training', initializer=tf.constant(False, tf.b
 switch_training_inference = tf.assign(is_training, tf.logical_not(is_training))
 
 xnet, ynet = networks.get_network(NETWORK, DATASET, features, training=is_training)
-ysoft = tf.nn.softmax(ynet)
 
 with tf.name_scope('trainer_optimizer'):
 	learning_rate = tf.Variable(STEPSIZE, name='learning_rate')
@@ -82,21 +81,20 @@ with tf.name_scope('trainer_optimizer'):
 	update_learning_rate = tf.assign(learning_rate, learning_rate / learning_rate_decay)
 	
 	opt_constructor = optimizers.ShiftBasedAdaMaxOptimizer if SHIFT_OPT else tf.train.AdamOptimizer
-	print(opt_constructor)
 	optimizer = opt_constructor(learning_rate=learning_rate)
-	loss = tf.square(tf.losses.hinge_loss(tf.one_hot(labels, num_classes), ysoft))
 	cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=ynet, labels=labels)
+	loss = tf.reduce_mean(cross_entropy)
 	
 	update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 	with tf.control_dependencies(update_ops):
 		global_step = tf.train.get_or_create_global_step()
-		train_op = optimizer.minimize(loss=cross_entropy, global_step=global_step)
+		train_op = optimizer.minimize(loss=loss, global_step=global_step)
 
 	
 # metrics definition
 with tf.variable_scope('metrics'):
-	mloss, mloss_update	  = tf.metrics.mean(loss)
-	accuracy, acc_update  = tf.metrics.accuracy(labels, tf.argmax(ysoft, axis=1))
+	mloss, mloss_update	  = tf.metrics.mean(cross_entropy)
+	accuracy, acc_update  = tf.metrics.accuracy(labels, tf.argmax(ynet, axis=1))
 
 	metrics = [mloss, accuracy]
 	metrics_update = [mloss_update, acc_update]
@@ -144,7 +142,7 @@ with tf.Session() as sess:
 		
 		# Training of the network
 		for nb in range(NUM_BATCHES_TRAIN):
-			outg, outn, _= sess.run([labels, ysoft, train_op])	# train network on a single batch
+			sess.run(train_op)	# train network on a single batch
 			batch_trn_loss, _ = sess.run(metrics_update)
 			trn_loss, a = sess.run(metrics)
 			

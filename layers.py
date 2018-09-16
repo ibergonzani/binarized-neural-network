@@ -7,7 +7,8 @@ def binarize(x):
 	# we also have to reassign the sign gradient otherwise it will be almost everywhere equal to zero
 	# using the straight through estimator
 	with tf.get_default_graph().gradient_override_map({'Sign': 'Identity'}):
-		return tf.sign(x)
+		return tf.sign(x)				#	<-- wrong sign doesn't return +1 for zero
+		#return tf.sign(tf.sign(x)+1e-8) 	<-- this should be ok
 
 
 	
@@ -116,7 +117,7 @@ def ap2(x):
  
 # Shift based Batch Normalizing Transform, applied to activation (x) over a mini-batch,
 #as described in http://arxiv.org/abs/1502.03167
-def shift_batch_norm(x, training=True, momentum=0.95, epsilon=1e-8, reuse=False, name="batch_norm"):
+def shift_batch_norm(x, training=True, momentum=0.99, epsilon=1e-8, reuse=False, name="batch_norm"):
 	
 	xshape = x.get_shape()[1:]
 	
@@ -151,7 +152,7 @@ def shift_batch_norm(x, training=True, momentum=0.95, epsilon=1e-8, reuse=False,
 # Spatial shift based batch normalization, like spatial batch normalization it keeps
 # the convolution property. Hence it applies the same transformation to each element
 # of the same feature map
-def spatial_shift_batch_norm(x, data_format='NHWC', training=True, momentum=0.95, epsilon=1e-8, reuse=False, name="spatial_batch_norm"):
+def spatial_shift_batch_norm(x, data_format='NHWC', training=True, momentum=0.99, epsilon=1e-8, reuse=False, name="spatial_batch_norm"):
 	assert data_format in ['NHWC', 'NCHW']
 	
 	if data_format == "NHWC":
